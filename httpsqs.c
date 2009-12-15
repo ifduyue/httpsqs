@@ -423,7 +423,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 		} else {
 			evhttp_add_header(req->output_headers, "Content-Type", "text/plain");
 		}
-		//evhttp_add_header(req->output_headers, "Keep-Alive", "120");
+		evhttp_add_header(req->output_headers, "Keep-Alive", "120");
 		//evhttp_add_header(req->output_headers, "Cneonction", "close");
 		
 		/*参数是否存在判断 */
@@ -615,8 +615,8 @@ int main(int argc, char **argv)
 
 	/* 打开数据表 */
 	httpsqs_db_tcbdb = tcbdbnew();
-	tcbdbtune(httpsqs_db_tcbdb, 1024, 2048, 40000000, 8, 10, BDBTLARGE);
-	tcbdbsetxmsiz(httpsqs_db_tcbdb, 1073741824);
+	tcbdbtune(httpsqs_db_tcbdb, 1024, 2048, 50000000, 8, 10, BDBTLARGE);
+	tcbdbsetxmsiz(httpsqs_db_tcbdb, 104857600); /* 内存缓存大小为100M */
 				
 	/* 判断表是否能打开 */
 	if(!tcbdbopen(httpsqs_db_tcbdb, httpsqs_settings_dataname, BDBOWRITER|BDBOCREAT)){
