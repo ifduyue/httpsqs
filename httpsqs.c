@@ -34,7 +34,7 @@ This is free software, and you are welcome to modify and redistribute it under t
 #include <event.h>
 #include <evhttp.h>
 
-#define VERSION "1.0 beta"
+#define VERSION "1.0"
 
 /* 全局设置 */
 TCBDB *httpsqs_db_tcbdb; /* 数据表 */
@@ -494,7 +494,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 					get_times = "1st lap";
 				}
 				evbuffer_add_printf(buf, "HTTP Simple Queue Service v%s\n", VERSION);
-				evbuffer_add_printf(buf, "-----------------------------------\n");
+				evbuffer_add_printf(buf, "------------------------------\n");
 				evbuffer_add_printf(buf, "Queue Name: %s\n", httpsqs_input_name);
 				evbuffer_add_printf(buf, "Maximum number of queues: %d\n", maxqueue);
 				evbuffer_add_printf(buf, "Put position of queue (%s): %d\n", put_times, putpos);
