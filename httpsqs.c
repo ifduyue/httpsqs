@@ -345,7 +345,7 @@ char *httpsqs_now_getpos(const char* httpsqs_input_name)
 	queue_name[0]='\0';
 	sprintf(queue_name, "%s:%s", httpsqs_input_name, "getpos");
 	/* 如果queue_get_value的值不存在，重置为1 */
-	if (queue_get_value == 0) {
+	if (queue_get_value == 0 && queue_put_value > 0) {
 		queue_get_value = 1;
 		tcbdbput2(httpsqs_db_tcbdb, queue_name, "1");
 	/* 如果队列的读取值（出队列）小于队列的写入值（入队列） */
@@ -470,8 +470,12 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 				} else {
 					char *httpsqs_output_value;
 					httpsqs_output_value = tcbdbget2(httpsqs_db_tcbdb, queue_name);
-					evbuffer_add_printf(buf, "%s", httpsqs_output_value);
-					free(httpsqs_output_value);
+					if (httpsqs_output_value) {
+						evbuffer_add_printf(buf, "%s", httpsqs_output_value);
+						free(httpsqs_output_value);
+					} else {
+						evbuffer_add_printf(buf, "%s", "HTTPSQS_GET_END");
+					}
 				}
 				free(queue_name);
 				
