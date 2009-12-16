@@ -1,5 +1,5 @@
 /*
-HTTP Simple Queue Service - httpsqs v1.0.20091215
+HTTP Simple Queue Service - httpsqs v1.1.20091216
 Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com
 This is free software, and you are welcome to modify and redistribute it under the New BSD License
 */
@@ -7,6 +7,8 @@ This is free software, and you are welcome to modify and redistribute it under t
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/queue.h>
+#include <sys/types.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,7 +36,7 @@ This is free software, and you are welcome to modify and redistribute it under t
 #include <event.h>
 #include <evhttp.h>
 
-#define VERSION "1.0"
+#define VERSION "1.1"
 
 /* 全局设置 */
 TCBDB *httpsqs_db_tcbdb; /* 数据表 */
@@ -68,67 +70,45 @@ void create_multilayer_dir( char *muldir )
     return;
 }
 
-/* 去除字符串两端的空格、TAB、逗号 */
-void trim( char *str )
+char *urldecode(char *input_str) 
 {
-        char *copied, *tail = NULL;
+		int len = strlen(input_str);
+		char *str = strdup(input_str);
+		
+        char *dest = str; 
+        char *data = str; 
 
-        if ( str == NULL )
-                return;
+        int value; 
+        int c; 
 
-        for( copied = str; *str; str++ )
-        {
-                if ( *str != ' ' && *str != '\t' && *str != ',' )
-                {
-                        *copied++ = *str;
-                         tail = copied;
-                }
-                else
-                {
-                         if ( tail )
-                                 *copied++ = *str;
-                }
-        }
+        while (len--) { 
+                if (*data == '+') { 
+                        *dest = ' '; 
+                } 
+                else if (*data == '%' && len >= 2 && isxdigit((int) *(data + 1)) 
+  && isxdigit((int) *(data + 2))) 
+                { 
 
-        if ( tail )
-             *tail = 0;
-        else
-             *copied = 0;
+                        c = ((unsigned char *)(data+1))[0]; 
+                        if (isupper(c)) 
+                                c = tolower(c); 
+                        value = (c >= '0' && c <= '9' ? c - '0' : c - 'a' + 10) * 16; 
+                        c = ((unsigned char *)(data+1))[1]; 
+                        if (isupper(c)) 
+                                c = tolower(c); 
+                                value += c >= '0' && c <= '9' ? c - '0' : c - 'a' + 10; 
 
-        return;
-}
-
-char *urldecode(char *in)
-{
-    char  *out;
-    char   temp[32];
-    char  *p, *q;
-    int             value;
-
-    out = (char *) malloc(strlen(in) + 1);
-
-    p = in, q = out;
-    while (*p != 0) {
-        if (*p == '+') {
-            *q++ = ' ';
-        } else if (*p == '%') {
-            temp[0] = *(p + 1);
-            temp[1] = *(p + 2);
-            temp[2] = 0;
-            sscanf(temp, "%x", &value);
-
-            *q++ = 0xff & value;
-
-            p += 2;
-        } else {
-            *q++ = *p;
-        }
-
-        p++;
-    }
-    *q = '\0';
-
-    return (char *) out;
+                        *dest = (char)value ; 
+                        data += 2; 
+                        len -= 2; 
+                } else { 
+                        *dest = *data; 
+                } 
+                data++; 
+                dest++; 
+        } 
+        *dest = '\0'; 
+        return str; 
 }
 
 static void show_help(void)
@@ -159,7 +139,7 @@ static int httpsqs_read_putpos(const char* httpsqs_input_name)
 	int queue_value = 0;
 	char *queue_value_tmp;
 	char *queue_name = (char *)malloc(300); /* 队列名称的总长度，用户输入的队列长度少于256字节 */
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	
 	sprintf(queue_name, "%s:%s", httpsqs_input_name, "putpos");
 	
@@ -179,7 +159,7 @@ static int httpsqs_read_getpos(const char* httpsqs_input_name)
 	int queue_value = 0;
 	char *queue_value_tmp;
 	char *queue_name = (char *)malloc(300); /* 队列名称的总长度，用户输入的队列长度少于256字节 */
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	
 	sprintf(queue_name, "%s:%s", httpsqs_input_name, "getpos");
 	
@@ -199,7 +179,7 @@ static int httpsqs_read_maxqueue(const char* httpsqs_input_name)
 	int queue_value = 0;
 	char *queue_value_tmp;
 	char *queue_name = (char *)malloc(300); /* 队列名称的总长度，用户输入的队列长度少于256字节 */
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	
 	sprintf(queue_name, "%s:%s", httpsqs_input_name, "maxqueue");
 	
@@ -235,8 +215,8 @@ static int httpsqs_maxqueue(const char* httpsqs_input_name, int httpsqs_input_nu
 	if (queue_maxnum_int >= queue_put_value && queue_maxnum_int >= queue_get_value && queue_put_value >= queue_get_value) {
 		char *queue_name = (char *)malloc(300); /* 队列名称的总长度，用户输入的队列长度少于256字节 */
 		char *queue_maxnum = (char *)malloc(16);
-		queue_name[0]='\0';
-		queue_maxnum[0]='\0';
+		queue_name[300]='\0';
+		queue_maxnum[16]='\0';
 		sprintf(queue_name, "%s:%s", httpsqs_input_name, "maxqueue");
 		sprintf(queue_maxnum, "%d", queue_maxnum_int);
 		tcbdbput2(httpsqs_db_tcbdb, queue_name, queue_maxnum);
@@ -253,15 +233,15 @@ static int httpsqs_reset(const char* httpsqs_input_name)
 {
 	char *queue_name = (char *)malloc(300); /* 队列名称的总长度，用户输入的队列长度少于256字节 */
 	
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	sprintf(queue_name, "%s:%s", httpsqs_input_name, "putpos");
 	tcbdbout2(httpsqs_db_tcbdb, queue_name);
 
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	sprintf(queue_name, "%s:%s", httpsqs_input_name, "getpos");
 	tcbdbout2(httpsqs_db_tcbdb, queue_name);
 	
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	sprintf(queue_name, "%s:%s", httpsqs_input_name, "maxqueue");
 	tcbdbout2(httpsqs_db_tcbdb, queue_name);
 	
@@ -275,7 +255,7 @@ char *httpsqs_view(const char* httpsqs_input_name, int pos)
 {
 	char *queue_value;
 	char *queue_name = (char *)malloc(300); /* 队列名称的总长度，用户输入的队列长度少于256字节 */
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	
 	sprintf(queue_name, "%s:%d", httpsqs_input_name, pos);
 	
@@ -299,7 +279,7 @@ char *httpsqs_now_putpos(const char* httpsqs_input_name)
 	/* 读取当前队列写入位置点 */
 	queue_value = httpsqs_read_putpos(httpsqs_input_name);
 	
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	sprintf(queue_name, "%s:%s", httpsqs_input_name, "putpos");	
 	
 	/* 队列写入位置点加1 */
@@ -307,18 +287,18 @@ char *httpsqs_now_putpos(const char* httpsqs_input_name)
 	if (queue_value > maxqueue_num) { /* 如果队列ID大于最大队列数量，则重置队列写入位置点的值为1 */
 		if(tcbdbput2(httpsqs_db_tcbdb, queue_name, "1")) {
 			queue_value = 1;
-			queue_name[0]='\0';
+			queue_name[300]='\0';
 			sprintf(queue_name, "%s:%s", httpsqs_input_name, "puttimes");
 			tcbdbput2(httpsqs_db_tcbdb, queue_name, "yes"); /* 如果队列写入位置 */
 		}
 	} else { /* 队列写入位置点加1后的值，回写入数据库 */
-		queue_input[0]='\0';
+		queue_input[32]='\0';
 		sprintf(queue_input, "%d", queue_value);
 		tcbdbput2(httpsqs_db_tcbdb, queue_name, queue_input);
 		free(queue_input);
 	}
 	
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_value);
 	
 	return queue_name;
@@ -342,7 +322,7 @@ char *httpsqs_now_getpos(const char* httpsqs_input_name)
 	queue_get_value = httpsqs_read_getpos(httpsqs_input_name);
 	
 	/* 如果queue_get_value的值不存在，重置队列读取位置点为1 */
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	sprintf(queue_name, "%s:%s", httpsqs_input_name, "getpos");
 	/* 如果queue_get_value的值不存在，重置为1 */
 	if (queue_get_value == 0 && queue_put_value > 0) {
@@ -352,7 +332,7 @@ char *httpsqs_now_getpos(const char* httpsqs_input_name)
 	} else if (queue_get_value < queue_put_value) {
 		queue_get_value = queue_get_value + 1;
 		char *queue_input = (char *)malloc(32);		
-		queue_input[0]='\0';
+		queue_input[32]='\0';
 		sprintf(queue_input, "%d", queue_get_value);
 		tcbdbput2(httpsqs_db_tcbdb, queue_name, queue_input);
 		free(queue_input);
@@ -360,7 +340,7 @@ char *httpsqs_now_getpos(const char* httpsqs_input_name)
 	} else if (queue_get_value > queue_put_value && queue_get_value < maxqueue_num) {
 		queue_get_value = queue_get_value + 1;
 		char *queue_input = (char *)malloc(32);		
-		queue_input[0]='\0';
+		queue_input[32]='\0';
 		sprintf(queue_input, "%d", queue_get_value);
 		tcbdbput2(httpsqs_db_tcbdb, queue_name, queue_input);
 		free(queue_input);
@@ -374,7 +354,7 @@ char *httpsqs_now_getpos(const char* httpsqs_input_name)
 	}
 	
 	
-	queue_name[0]='\0';
+	queue_name[300]='\0';
 	if (queue_get_value == 0) {
 		/* 队列结束 */
 		sprintf(queue_name, "%s", "HTTPSQS_GET_END");
@@ -392,7 +372,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
         buf = evbuffer_new();
 		
 		/* 分析URL参数 */
-		char *decode_uri = urldecode((char*) evhttp_request_uri(req));
+		char *decode_uri = strdup((char*) evhttp_request_uri(req));
 		struct evkeyvalq httpsqs_http_query;
 		evhttp_parse_query(decode_uri, &httpsqs_http_query);
 		free(decode_uri);
@@ -416,7 +396,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 		/* 返回给用户的Header头信息 */
 		if (httpsqs_input_charset != NULL && strlen(httpsqs_input_charset) <= 40) {
 			char *content_type = (char *)malloc(64);
-			content_type[0]='\0';		
+			content_type[64]='\0';		
 			sprintf(content_type, "text/plain; charset=%s", httpsqs_input_charset);
 			evhttp_add_header(req->output_headers, "Content-Type", content_type);
 			free(content_type);
@@ -431,16 +411,17 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 			/* 入队列 */
 			if (strcmp(httpsqs_input_opt, "put") == 0) {
 				/* 优先接收POST正文信息 */
-				int buffer_data_len = EVBUFFER_LENGTH(req->input_buffer);
+				int buffer_data_len;
+				buffer_data_len = EVBUFFER_LENGTH(req->input_buffer);
 				if (buffer_data_len > 0) {
 					char *httpsqs_input_postbuffer;
 					char *queue_name = httpsqs_now_putpos((char *)httpsqs_input_name);
-					char *buffer_data = (char *)malloc(buffer_data_len);
-					buffer_data[buffer_data_len] = '\0';
-					memcpy(buffer_data,  (char*) EVBUFFER_DATA(req->input_buffer), buffer_data_len);
-					httpsqs_input_postbuffer = urldecode((char*) buffer_data);
+					char *buffer_data = (char *)malloc(buffer_data_len + 1);
+					memset(buffer_data, '\0', buffer_data_len + 1);
+					memcpy (buffer_data, EVBUFFER_DATA(req->input_buffer), buffer_data_len);
+					httpsqs_input_postbuffer = urldecode(buffer_data);
 					tcbdbput2(httpsqs_db_tcbdb, queue_name, httpsqs_input_postbuffer);
-					free(queue_name); 
+					free(queue_name);
 					free(httpsqs_input_postbuffer);
 					free(buffer_data);
 					evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_OK");
@@ -449,10 +430,10 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 					buffer_data_len = strlen(httpsqs_input_data);
 					char *httpsqs_input_postbuffer;
 					char *queue_name = httpsqs_now_putpos((char *)httpsqs_input_name);
-					char *buffer_data = (char *)malloc(buffer_data_len);
-					buffer_data[buffer_data_len] = '\0';
-					memcpy(buffer_data,  (char*) httpsqs_input_data, buffer_data_len);
-					httpsqs_input_postbuffer = urldecode((char*) buffer_data);
+					char *buffer_data = (char *)malloc(buffer_data_len + 1);
+					memset(buffer_data, '\0', buffer_data_len + 1);
+					memcpy (buffer_data, httpsqs_input_data, buffer_data_len);
+					httpsqs_input_postbuffer = urldecode(buffer_data);
 					tcbdbput2(httpsqs_db_tcbdb, queue_name, buffer_data);
 					free(queue_name); 
 					free(httpsqs_input_postbuffer);
@@ -614,7 +595,7 @@ int main(int argc, char **argv)
 	/* 数据表路径 */
 	int httpsqs_settings_dataname_len = 1024;
 	char *httpsqs_settings_dataname = (char *)malloc(httpsqs_settings_dataname_len);
-	httpsqs_settings_dataname[0]='\0';
+	httpsqs_settings_dataname[httpsqs_settings_dataname_len]='\0';
 	sprintf(httpsqs_settings_dataname, "%s/httpsqs.db", httpsqs_settings_datapath);
 
 	/* 打开数据表 */
