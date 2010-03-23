@@ -100,7 +100,6 @@ char *getresult(char *data)
 void process(char *queuename, int loop)
 {
 	FILE * fp;
-	int m;
 	int black_sock;
     char data[3];
     char * str;
@@ -109,7 +108,8 @@ void process(char *queuename, int loop)
 	int len = 0;
 	int i = 0;
 
-	for(m = 0; m < loop; m++)
+	loop --;
+	while(loop)
     {
 	    memset(str, 0, strlen(str));
         len = 0;
@@ -180,6 +180,7 @@ void process(char *queuename, int loop)
 			    fclose(fp);
 		    }
 	    }
+		loop --;
     }
 	return;
 }
