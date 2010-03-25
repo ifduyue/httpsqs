@@ -28,7 +28,7 @@
 #define HttpsqsIp "192.168.1.102"
 #define HttpsqsPort 1218
 
-#define RemoteIp "121.52.218.137"
+#define RemoteIp "xxx.xxx.xxx.xxx"//处理程序ip
 #define RemotePort 80
 
 void init_daemon(void);
@@ -102,85 +102,111 @@ void process(char *queuename, int loop)
 	FILE * fp;
 	int black_sock;
     char data[3];
-    char * str;
+    char str[20][5000];
+    char post[5000];
     char pattern[] = "Connection: close";
-	char pattern_2[] = "Array";
-	int len = 0;
 	int i = 0;
+    int j = 0;
+    int len = 0;
 
-	loop --;
-	while(loop)
+    char * pos;
+    int p = 0;
+
+    int dataline = 8;
+    char * queuedata;
+
+    loop --;
+    while(loop)
     {
-	    memset(str, 0, strlen(str));
-        len = 0;
-        i = 0;
         memset(data, 0, strlen(data));
 
         black_sock = htconnect(HttpsqsIp, HttpsqsPort);
-	    if (black_sock < 0) return;
+        if (black_sock < 0) return;
 
-	    htsend(black_sock, "GET /?charset=utf-8&name=%s&opt=get HTTP/1.1\r\n", queuename, 10);
-	    htsend(black_sock, "Host: %s\r\n", HttpsqsIp, 10);
-	    htsend(black_sock, "Connection: close\r\n", 10);
-	    htsend(black_sock, "\r\n", 10);
+        htsend(black_sock, "GET /?charset=utf-8&name=%s&opt=get HTTP/1.1\r\n", queuename, 10);
+        htsend(black_sock, "Host: %s\r\n", HttpsqsIp, 10);
+        htsend(black_sock, "Connection: close\r\n", 10);
+        htsend(black_sock, "\r\n", 10);
 
-	    i = 0;
-	    while (read(black_sock, data, 1) > 0)
-    	{
-		    str[i] = data[0];
-		    i++;
-	    }
-	    close(black_sock);
+        i = 0;
+        j = 0;
+        while (read(black_sock, data, 1) > 0)
+	    {
+            if(data[0] == '\n' && i == 0)
+                continue;
+            if(data[0] == '\n')
+            {
+                if(i != 0)
+                {
+                    str[j][i+1] == '\0';
+                    j++;
+                    i = 0;
+                }
+            } else {
+                str[j][i] = data[0];
+                i++;
+            }
+        }
+
+        close(black_sock);
         memset(data, 0, strlen(data));
 
-        strcpy(str, strstr(str, pattern));
-        strcpy(str, getresult(str));
+        if(str[3][0] == 'P')
+        {
+            pos = malloc((strlen(str[3])-5)*sizeof(char));
+            for(i=6; i<strlen(str[3]); i++)
+            {
+                pos[i-6] = str[3][i];
+            }
+            p = atoi(pos);
 
-	    if(strchr(str, 'H') == NULL)
-	    {
-		    if((fp = fopen("test.log", "a")) >= 0)
-			    fprintf(fp, "GET FROM HTTPSQS %s\r\n", str);
+            queuedata = malloc(strlen(str[dataline])*sizeof(char));
+            strcpy(queuedata, str[dataline]);
+        
+		    if((fp = fopen("httpsqs_feed.log", "a")) >= 0)
+			    fprintf(fp, "GET FROM HTTPSQS:\r\nPOS:%d\nDATA:%s\r\n", p, queuedata);
 
-		    black_sock = htconnect(RemoteIp, RemotePort);
-		    if (black_sock < 0) return;
+            black_sock = htconnect(RemoteIp, RemotePort);
+            if (black_sock < 0) return;
+            len = strlen(queuedata) + 5;
+            htsend(black_sock, "POST /index.php?m=data&a=update HTTP/1.1\r\n", 10);//处理程序
+            htsend(black_sock, "Content-type: application/x-www-form-urlencoded\r\n", 10);
+            htsend(black_sock, "Host: www.YOURDOMAIN.com\r\n", 10);
+            htsend(black_sock, "Content-Length: %d\r\n", len, 10);
+            htsend(black_sock, "Connection: close\r\n", 10);
+            htsend(black_sock, "\r\n", 10);
+            htsend(black_sock, "data=%s", queuedata, 10);
 
-		    len = strlen(str) + 5;
-		    htsend(black_sock, "POST /index.php?m=data&a=update HTTP/1.1\r\n", 10);
-		    htsend(black_sock, "Content-type: application/x-www-form-urlencoded\r\n", 10);
-		    htsend(black_sock, "Host: www.oooffice.com\r\n", 10);
-		    htsend(black_sock, "Content-Length: %d\r\n", len, 10);
-		    htsend(black_sock, "Connection: close\r\n", 10);
-		    htsend(black_sock, "\r\n", 10);
-		    htsend(black_sock, "data=%s", str, 10);
+            free(queuedata);
 
-		    memset(str, 0, strlen(str));
-		    i = 0;
-		    while (read(black_sock, data, 1)>0)
-		    {
+            i = 0;
+            while (read(black_sock, data, 1)>0)
+            {
                 if(data[0] == '|')
                 {
-                    if(str[i-1] == 'D' && str[i-2] == 'N' && str[i-3] == 'E')
+                    if(post[i-1] == 'D' && post[i-2] == 'N' && post[i-3] == 'E')
                     {
-                        str[i-3] = '\0';
+                        post[i-3] = '\0';
                         break;
                     }
                 }
-			    str[i] = data[0];
-			    i++;
-		    }
+                post[i] = data[0];
+                i++;
+            }
             memset(data, 0, strlen(data));
             close(black_sock);
-		    if(fp >= 0)
-		    {
-			    if(strlen(str))
+            if(strlen(post))
+            {
+			    if(fp >=0)
 			    {
-				    strcpy(str, strstr(str, pattern_2));
-				    fprintf(fp, "POST TO REMOTE\r\n%s\r\n", str);
+				    strcpy(post, strstr(post, "Array"));
+				    fprintf(fp, "POST TO REMOTE\r\n%s\r\n", post);
+				    fclose(fp);
 			    }
-			    fclose(fp);
-		    }
-	    }
-		loop --;
+            }
+        }
+        memset(post, 0, strlen(post));
+        loop --;
     }
 	return;
 }
