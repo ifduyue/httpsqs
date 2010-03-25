@@ -6,10 +6,9 @@
  *希望张宴大哥给予指正与修改，体现我们开源的优势～哈哈
  *
  *使用方法：
- *gcc -o httpsqs_client http_client.c
- *./httpsqs_client -q your_queue_name -t 20(每秒获取队列的次数)
- *还不会写MAKEFILE呵呵
- *本程序只能实现读取队列内容，对于1.2版本的读取pos还不支持（搞字符串指针，总弄得内存报错……）
+ *make
+ *make install
+ *client_httpsqs -q your_queue_name -t 20(每秒获取队列的次数)
  */
 #include <unistd.h>
 #include <signal.h> 
@@ -28,7 +27,7 @@
 #define HttpsqsIp "192.168.1.102"
 #define HttpsqsPort 1218
 
-#define RemoteIp "xxx.xxx.xxx.xxx"//处理程序ip
+#define RemoteIp "xxx.xxx.xxx.xxx"//本程序获取队列后的处理是将数据POST给PHP程序 用户可以自行修改那一部分
 #define RemotePort 80
 
 void init_daemon(void);
@@ -163,20 +162,21 @@ void process(char *queuename, int loop)
             queuedata = malloc(strlen(str[dataline])*sizeof(char));
             strcpy(queuedata, str[dataline]);
         
-		    if((fp = fopen("httpsqs_feed.log", "a")) >= 0)
+		    if((fp = fopen("httpsqs_sms.log", "a")) >= 0)
 			    fprintf(fp, "GET FROM HTTPSQS:\r\nPOS:%d\nDATA:%s\r\n", p, queuedata);
 
+            //这部分是获取队列内容后的操作部分，queuedata为队列内容，p为队列的Pos
             black_sock = htconnect(RemoteIp, RemotePort);
             if (black_sock < 0) return;
             len = strlen(queuedata) + 5;
-            htsend(black_sock, "POST /index.php?m=data&a=update HTTP/1.1\r\n", 10);//处理程序
+            htsend(black_sock, "POST /index.php?m=data&a=update HTTP/1.1\r\n", 10);
             htsend(black_sock, "Content-type: application/x-www-form-urlencoded\r\n", 10);
-            htsend(black_sock, "Host: www.YOURDOMAIN.com\r\n", 10);
+            htsend(black_sock, "Host: www.oooffice.com\r\n", 10);
             htsend(black_sock, "Content-Length: %d\r\n", len, 10);
             htsend(black_sock, "Connection: close\r\n", 10);
             htsend(black_sock, "\r\n", 10);
             htsend(black_sock, "data=%s", queuedata, 10);
-
+            
             free(queuedata);
 
             i = 0;
