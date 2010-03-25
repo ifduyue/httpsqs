@@ -1,11 +1,11 @@
 # Makefile for httpsqs_client
 CC=gcc
 
-client_httpsqs: client_httpsqs.c
-	$(CC) client_httpsqs.c -o client_httpsqs
+httpsqs_client: httpsqs_client.c
+	$(CC) httpsqs_client.c -o httpsqs_client
 
-clean: client_httpsqs
-	rm -f client_httpsqs
+clean: httpsqs_client
+	rm -f httpsqs_client
 
-install: client_httpsqs
-	install -m 4755 -o root client_httpsqs $(DESTDIR)/usr/bin
+install: httpsqs_client
+	install -m 4755 -o root httpsqs_client $(DESTDIR)/usr/bin

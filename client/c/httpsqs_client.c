@@ -8,19 +8,21 @@
  *使用方法：
  *make
  *make install
- *client_httpsqs -q your_queue_name -t 20(每秒获取队列的次数)
+ *httpsqs_client -q your_queue_name -t 20(每秒获取队列的次数)
+ *
+ *作者：李博 lb13810398408@gmail.com
  */
 #include <unistd.h>
-#include <signal.h> 
+#include <signal.h>
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <stdio.h> 
-#include <stdlib.h> 
-#include <string.h> 
-#include <stdarg.h> 
-#include <sys/socket.h> 
-#include <netinet/in.h> 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <netdb.h>
 #include <time.h>
 
@@ -81,27 +83,12 @@ int htsend(int sock,char *fmt,...)
     return send(sock, BUF, strlen(BUF), 0);
 }
 
-char *getresult(char *data)
-{
-    char * res;
-    int i;
-    res = (char *)malloc(strlen(data));
-    for(i=0; i<strlen(data); i++)
-    {
-        if(i >= 21)
-        {
-            res[i-21] = data[i];
-        }
-    }
-    return res;
-}
-
 void process(char *queuename, int loop)
 {
 	FILE * fp;
 	int black_sock;
     char data[3];
-    char str[20][5000];
+    char * str[9];
     char post[5000];
     char pattern[] = "Connection: close";
 	int i = 0;
@@ -137,11 +124,13 @@ void process(char *queuename, int loop)
             {
                 if(i != 0)
                 {
+                    str[j] = (char *)realloc(str[j], (i + 2) * sizeof(char));
                     str[j][i+1] == '\0';
                     j++;
                     i = 0;
                 }
             } else {
+                str[j] = (char *)realloc(str[j], (i + 1) * sizeof(char));
                 str[j][i] = data[0];
                 i++;
             }
@@ -152,20 +141,20 @@ void process(char *queuename, int loop)
 
         if(str[3][0] == 'P')
         {
-            pos = malloc((strlen(str[3])-5)*sizeof(char));
+            pos = malloc((strlen(str[3]) - 5) * sizeof(char));
             for(i=6; i<strlen(str[3]); i++)
             {
                 pos[i-6] = str[3][i];
             }
             p = atoi(pos);
 
-            queuedata = malloc(strlen(str[dataline])*sizeof(char));
+            queuedata = malloc(strlen(str[dataline]) * sizeof(char));
             strcpy(queuedata, str[dataline]);
         
 		    if((fp = fopen("httpsqs_sms.log", "a")) >= 0)
 			    fprintf(fp, "GET FROM HTTPSQS:\r\nPOS:%d\nDATA:%s\r\n", p, queuedata);
 
-            //这部分是获取队列内容后的操作部分，queuedata为队列内容，p为队列的Pos
+			//这部分是获取队列内容后的操作部分，queuedata为队列内容，p为队列的Pos
             black_sock = htconnect(RemoteIp, RemotePort);
             if (black_sock < 0) return;
             len = strlen(queuedata) + 5;
@@ -176,7 +165,7 @@ void process(char *queuename, int loop)
             htsend(black_sock, "Connection: close\r\n", 10);
             htsend(black_sock, "\r\n", 10);
             htsend(black_sock, "data=%s", queuedata, 10);
-            
+
             free(queuedata);
 
             i = 0;
