@@ -13,16 +13,16 @@
  *作者：李博 lb13810398408@gmail.com
  */
 #include <unistd.h>
-#include <signal.h>
+#include <signal.h> 
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <stdio.h> 
+#include <stdlib.h> 
+#include <string.h> 
+#include <stdarg.h> 
+#include <sys/socket.h> 
+#include <netinet/in.h> 
 #include <netdb.h>
 #include <time.h>
 
@@ -98,6 +98,7 @@ void process(char *queuename, int loop)
     char * pos;
     int p = 0;
 
+    int posline = 3;
     int dataline = 8;
     char * queuedata;
 
@@ -124,14 +125,22 @@ void process(char *queuename, int loop)
             {
                 if(i != 0)
                 {
-                    str[j] = (char *)realloc(str[j], (i + 2) * sizeof(char));
+                    str[j] = (char *)realloc(str[j], (i+2)*sizeof(char));
                     str[j][i+1] == '\0';
+                    if(j == posline)
+                    {
+                        if(str[posline][0] != 'P')
+                            break;
+                    }
                     j++;
                     i = 0;
                 }
             } else {
-                str[j] = (char *)realloc(str[j], (i + 1) * sizeof(char));
-                str[j][i] = data[0];
+                if(j == posline || j == dataline)
+                {
+                    str[j] = (char *)realloc(str[j], (i+1)*sizeof(char));
+                    str[j][i] = data[0];
+                }
                 i++;
             }
         }
@@ -139,26 +148,28 @@ void process(char *queuename, int loop)
         close(black_sock);
         memset(data, 0, strlen(data));
 
-        if(str[3][0] == 'P')
+        if(str[posline][0] == 'P')
         {
-            pos = malloc((strlen(str[3]) - 5) * sizeof(char));
-            for(i=6; i<strlen(str[3]); i++)
+            pos = malloc((strlen(str[posline])-5)*sizeof(char));
+            for(i=6; i<strlen(str[posline]); i++)
             {
-                pos[i-6] = str[3][i];
+                pos[i-6] = str[posline][i];
             }
             p = atoi(pos);
 
-            queuedata = malloc(strlen(str[dataline]) * sizeof(char));
+            free(pos);
+
+            queuedata = malloc(strlen(str[dataline])*sizeof(char));
             strcpy(queuedata, str[dataline]);
         
-		    if((fp = fopen("httpsqs_sms.log", "a")) >= 0)
+		    if((fp = fopen("httpsqs_feed.log", "a")) >= 0)
 			    fprintf(fp, "GET FROM HTTPSQS:\r\nPOS:%d\nDATA:%s\r\n", p, queuedata);
 
 			//这部分是获取队列内容后的操作部分，queuedata为队列内容，p为队列的Pos
             black_sock = htconnect(RemoteIp, RemotePort);
             if (black_sock < 0) return;
             len = strlen(queuedata) + 5;
-            htsend(black_sock, "POST /index.php?m=data&a=update HTTP/1.1\r\n", 10);
+            htsend(black_sock, "POST /index.php?m=feed&a=feed_add HTTP/1.1\r\n", 10);
             htsend(black_sock, "Content-type: application/x-www-form-urlencoded\r\n", 10);
             htsend(black_sock, "Host: www.oooffice.com\r\n", 10);
             htsend(black_sock, "Content-Length: %d\r\n", len, 10);
