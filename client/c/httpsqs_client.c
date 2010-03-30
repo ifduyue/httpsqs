@@ -83,6 +83,40 @@ int htsend(int sock,char *fmt,...)
     return send(sock, BUF, strlen(BUF), 0);
 }
 
+int httpsqs_get(char *queuename)
+{
+	int black_sock;
+
+	black_sock = htconnect(HttpsqsIp, HttpsqsPort);
+	if (black_sock < 0) return;
+
+	htsend(black_sock, "GET /?charset=utf-8&name=%s&opt=get HTTP/1.1\r\n", queuename, 10);
+	htsend(black_sock, "Host: %s\r\n", HttpsqsIp, 10);
+    htsend(black_sock, "Connection: close\r\n", 10);
+    htsend(black_sock, "\r\n", 10);
+
+	return black_sock;
+}
+
+int http_post(char *datastr)
+{
+	int black_sock;
+	int len = 0;
+
+	black_sock = htconnect(RemoteIp, RemotePort);
+    if (black_sock < 0) return;
+    len = strlen(datastr) + 5;
+    htsend(black_sock, "POST /index.php?m=feed&a=feed_add HTTP/1.1\r\n", 10);
+    htsend(black_sock, "Content-type: application/x-www-form-urlencoded\r\n", 10);
+    htsend(black_sock, "Host: www.oooffice.com\r\n", 10);
+    htsend(black_sock, "Content-Length: %d\r\n", len, 10);
+    htsend(black_sock, "Connection: close\r\n", 10);
+    htsend(black_sock, "\r\n", 10);
+    htsend(black_sock, "data=%s", datastr, 10);
+
+	return black_sock;
+}
+
 void process(char *queuename, int loop)
 {
 	FILE * fp;
@@ -106,13 +140,7 @@ void process(char *queuename, int loop)
         memset(datastr, 0, strlen(datastr));
         memset(pos, 0, strlen(pos));
 
-        black_sock = htconnect(HttpsqsIp, HttpsqsPort);
-        if (black_sock < 0) return;
-
-        htsend(black_sock, "GET /?charset=utf-8&name=%s&opt=get HTTP/1.1\r\n", queuename, 10);
-        htsend(black_sock, "Host: %s\r\n", HttpsqsIp, 10);
-        htsend(black_sock, "Connection: close\r\n", 10);
-        htsend(black_sock, "\r\n", 10);
+        black_sock = httpsqs_get(queuename);
 
         i = 0;
         j = 0;
@@ -167,16 +195,7 @@ void process(char *queuename, int loop)
 			    fprintf(fp, "GET FROM HTTPSQS:\r\nPOS:%d\nDATA:%s\r\n", p, datastr);
 
 			//这部分是获取队列内容后的操作部分，queuedata为队列内容，p为队列的Pos
-            black_sock = htconnect(RemoteIp, RemotePort);
-            if (black_sock < 0) return;
-            len = strlen(datastr) + 5;
-            htsend(black_sock, "POST /index.php?m=feed&a=feed_add HTTP/1.1\r\n", 10);
-            htsend(black_sock, "Content-type: application/x-www-form-urlencoded\r\n", 10);
-            htsend(black_sock, "Host: www.oooffice.com\r\n", 10);
-            htsend(black_sock, "Content-Length: %d\r\n", len, 10);
-            htsend(black_sock, "Connection: close\r\n", 10);
-            htsend(black_sock, "\r\n", 10);
-            htsend(black_sock, "data=%s", datastr, 10);
+            black_sock = http_post(datastr);
 
             i = 0;
             while (read(black_sock, data, 1)>0)
