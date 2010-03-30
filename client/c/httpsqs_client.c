@@ -99,9 +99,6 @@ void process(char *queuename, int loop)
     char pos[10];
     int p = 0;
 
-    int posline = 3;
-    int dataline = 8;
-
     loop --;
     while(loop)
     {
