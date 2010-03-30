@@ -88,24 +88,26 @@ void process(char *queuename, int loop)
 	FILE * fp;
 	int black_sock;
     char data[3];
-    char * str[9];
+    char posstr[15];
+    char datastr[2000];
     char post[5000];
-    char pattern[] = "Connection: close";
 	int i = 0;
     int j = 0;
     int len = 0;
+    int flag = 0;
 
-    char * pos;
+    char pos[10];
     int p = 0;
 
     int posline = 3;
     int dataline = 8;
-    char * queuedata;
 
     loop --;
     while(loop)
     {
         memset(data, 0, strlen(data));
+        memset(datastr, 0, strlen(datastr));
+        memset(pos, 0, strlen(pos));
 
         black_sock = htconnect(HttpsqsIp, HttpsqsPort);
         if (black_sock < 0) return;
@@ -117,67 +119,67 @@ void process(char *queuename, int loop)
 
         i = 0;
         j = 0;
+        
         while (read(black_sock, data, 1) > 0)
 	    {
-            if(data[0] == '\n' && i == 0)
-                continue;
-            if(data[0] == '\n')
+            if(j == 3)
             {
-                if(i != 0)
+                if(data[0] == 'P')
+                    flag = 1;
+                if(flag == 1)
                 {
-                    str[j] = (char *)realloc(str[j], (i+2)*sizeof(char));
-                    str[j][i+1] == '\0';
-                    if(j == posline)
-                    {
-                        if(str[posline][0] != 'P')
-                            break;
-                    }
-                    j++;
-                    i = 0;
+                    i++;
+                    if(i >= 6)
+                        posstr[i-6] = data[0];
                 }
-            } else {
-                if(j == posline || j == dataline)
-                {
-                    str[j] = (char *)realloc(str[j], (i+1)*sizeof(char));
-                    str[j][i] = data[0];
-                }
-                i++;
             }
+            if(j == 4 && strlen(posstr) > 2)
+            {
+                for(i = 0; i < strlen(posstr)-2; i++)
+                    pos[i] = posstr[i];
+                pos[strlen(pos)] = '\0';
+                i = 0;
+                if(strlen(pos) > 0)
+                    flag = 2;
+            }
+            if(flag == 2 && strlen(pos) > 0)
+            {
+                if(j == 8)
+                {
+                    datastr[i] = data[0];
+                    i++;
+                }
+            }
+            if(data[0] == '\n')
+				j ++;
         }
+        if(strlen(datastr) > 0)
+            datastr[strlen(datastr)] = '\0';
+
+        if(strlen(datastr) > 0 && strlen(pos) > 0)
+            printf("POS:%s\nDATA:%s\n", pos, datastr);
 
         close(black_sock);
         memset(data, 0, strlen(data));
 
-        if(str[posline][0] == 'P')
+        if(strlen(datastr) > 0 && strlen(pos) > 0)
         {
-            pos = malloc((strlen(str[posline])-5)*sizeof(char));
-            for(i=6; i<strlen(str[posline]); i++)
-            {
-                pos[i-6] = str[posline][i];
-            }
             p = atoi(pos);
-
-            free(pos);
-
-            queuedata = malloc(strlen(str[dataline])*sizeof(char));
-            strcpy(queuedata, str[dataline]);
         
 		    if((fp = fopen("httpsqs_feed.log", "a")) >= 0)
-			    fprintf(fp, "GET FROM HTTPSQS:\r\nPOS:%d\nDATA:%s\r\n", p, queuedata);
+			    fprintf(fp, "GET FROM HTTPSQS:\r\nPOS:%d\nDATA:%s\r\n", p, datastr);
 
 			//这部分是获取队列内容后的操作部分，queuedata为队列内容，p为队列的Pos
             black_sock = htconnect(RemoteIp, RemotePort);
             if (black_sock < 0) return;
-            len = strlen(queuedata) + 5;
+            len = strlen(datastr) + 5;
             htsend(black_sock, "POST /index.php?m=feed&a=feed_add HTTP/1.1\r\n", 10);
             htsend(black_sock, "Content-type: application/x-www-form-urlencoded\r\n", 10);
             htsend(black_sock, "Host: www.oooffice.com\r\n", 10);
             htsend(black_sock, "Content-Length: %d\r\n", len, 10);
             htsend(black_sock, "Connection: close\r\n", 10);
             htsend(black_sock, "\r\n", 10);
-            htsend(black_sock, "data=%s", queuedata, 10);
-
-            free(queuedata);
+            htsend(black_sock, "data=%s", datastr, 10);
 
             i = 0;
             while (read(black_sock, data, 1)>0)
@@ -205,6 +207,7 @@ void process(char *queuename, int loop)
 			    }
             }
         }
+
         memset(post, 0, strlen(post));
         loop --;
     }
