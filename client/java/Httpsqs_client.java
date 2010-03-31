@@ -7,13 +7,12 @@ import java.io.*;
 import java.net.*;
 
 class Httpsqs_client {
-	int i = 0;
-	String SERVER, PORT, CHARSET;
+	private String server, port, charset;
 
 	public Httpsqs_client(String server, String port, String charset) {
-		SERVER = server;
-		PORT = port;
-		CHARSET = charset;
+		this.server = server;
+		this.port = port;
+		this.charset = charset;
 	}
 	
 	private String doprocess(String urlstr) {
@@ -40,7 +39,7 @@ class Httpsqs_client {
 	}
 	
 	public String maxqueue(String queue_name, String num) {
-		String urlstr = "http://" + SERVER + ":" + PORT + "/?name=" + queue_name + "&opt=maxqueue&num=" + num;
+		String urlstr = "http://" + this.server + ":" + this.port + "/?name=" + queue_name + "&opt=maxqueue&num=" + num;
 		String result = null;
 		
 		result = this.doprocess(urlstr);
@@ -48,7 +47,7 @@ class Httpsqs_client {
 	}
 	
 	public String reset(String queue_name) {
-		String urlstr = "http://" + SERVER + ":" + PORT + "/?name=" + queue_name + "&opt=reset";
+		String urlstr = "http://" + this.server + ":" + this.port + "/?name=" + queue_name + "&opt=reset";
 		String result = null;
 		
 		result = this.doprocess(urlstr);
@@ -56,7 +55,7 @@ class Httpsqs_client {
 	}
 	
 	public String view(String queue_name, String pos) {
-		String urlstr = "http://" + SERVER + ":" + PORT + "/?charset=" + CHARSET + "&name=" + queue_name + "&opt=view&pos=" + pos;
+		String urlstr = "http://" + this.server + ":" + this.port + "/?charset=" + this.charset + "&name=" + queue_name + "&opt=view&pos=" + pos;
 		String result = null;
 		
 		result = this.doprocess(urlstr);
@@ -64,7 +63,7 @@ class Httpsqs_client {
 	}
 	
 	public String status(String queue_name) {
-		String urlstr = "http://" + SERVER + ":" + PORT + "/?name=" + queue_name + "&opt=status";
+		String urlstr = "http://" + this.server + ":" + this.port + "/?name=" + queue_name + "&opt=status";
 		String result = null;
 		
 		result = this.doprocess(urlstr);
@@ -72,7 +71,7 @@ class Httpsqs_client {
 	}
 	
 	public String get(String queue_name) {
-		String urlstr = "http://" + SERVER + ":" + PORT + "/?charset=" + CHARSET + "&name=" + queue_name + "&opt=get";
+		String urlstr = "http://" + this.server + ":" + this.port + "/?charset=" + this.charset + "&name=" + queue_name + "&opt=get";
 		String result = null;
 		
 		result = this.doprocess(urlstr);
@@ -80,7 +79,7 @@ class Httpsqs_client {
 	}
 
 	public String put(String queue_name, String data) {
-		String urlstr = "http://" + SERVER + ":" + PORT + "/?name=" + queue_name + "&opt=put";
+		String urlstr = "http://" + this.server + ":" + this.port + "/?name=" + queue_name + "&opt=put";
 		URL url = null;
 		try {
 			url = new URL(urlstr);
