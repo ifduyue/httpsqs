@@ -5,5 +5,14 @@ public class Test {
 		 String result = null;
 		 result = sqs.put("testq", "dsadasd");
 		 System.out.println(result);
+		 System.out.println("---------------------------");
+		 result = sqs.status("testq");
+		 System.out.println(result);
+		 System.out.println("---------------------------");
+		 result = sqs.get("testq");
+		 System.out.println(result);
+		 System.out.println("---------------------------");
+		 result = sqs.reset("testq");
+		 System.out.println(result);
 	 }
 }
