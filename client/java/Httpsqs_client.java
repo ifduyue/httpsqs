@@ -1,3 +1,8 @@
+/*
+ * 不包括keep-alive的部分，get方法只能获得数据，无法获得pos
+ * 作者：李博 lb13810398408@gmail.com
+ */
+
 import java.io.*;
 import java.net.*;
 
