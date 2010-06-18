@@ -1,5 +1,5 @@
 /*
-HTTP Simple Queue Service - httpsqs v1.2.20100311
+HTTP Simple Queue Service - httpsqs v1.3.20100617
 Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com
 This is free software, and you are welcome to modify and redistribute it under the New BSD License
 */
@@ -36,10 +36,13 @@ This is free software, and you are welcome to modify and redistribute it under t
 #include <event.h>
 #include <evhttp.h>
 
-#define VERSION "1.2"
+#define VERSION "1.3"
 
 /* 全局设置 */
 TCBDB *httpsqs_db_tcbdb; /* 数据表 */
+int httpsqs_settings_syncinterval; /* 同步更新内容到磁盘的间隔时间 */
+char *httpsqs_settings_keepalive; /* Keep-Alive 时间 */
+char *httpsqs_settings_pidfile; /* PID文件 */
 
 /* 创建多层目录的函数 */
 void create_multilayer_dir( char *muldir ) 
@@ -114,17 +117,22 @@ char *urldecode(char *input_str)
 static void show_help(void)
 {
 	char *b = "--------------------------------------------------------------------------------------------------\n"
-		  "HTTP Simple Queue Service - httpsqs v" VERSION "\n\n"
+		  "HTTP Simple Queue Service - httpsqs v" VERSION " (June 19, 2010)\n\n"
 		  "Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com\n"
 		  "This is free software, and you are welcome to modify and redistribute it under the New BSD License\n"
 		  "\n"
 		   "-l <ip_addr>  interface to listen on, default is 0.0.0.0\n"
 		   "-p <num>      TCP port number to listen on (default: 1218)\n"
 		   "-x <path>     database directory (example: /opt/httpsqs/data)\n"
-		   "-t <second>   timeout for an http request (default: 1)\n"		   
+		   "-t <second>   timeout for an http request (default: 3)\n"
+		   "-k <second>   keep-alive time (default: 15)\n"
+		   "-s <second>   the interval to sync updated contents to the disk (default: 5)\n"
+		   "-c <num>      the maximum number of non-leaf nodes to be cached (default: 10000)\n"
+		   "-m <size>     database memory cache size in MB (default: 100)\n"
+		   "-i <file>     save PID in <file> (default: /tmp/httpsqs.pid)\n"
 		   "-d            run as a daemon\n"
 		   "-h            print this help and exit\n\n"
-		   "Use command \"killall httpsqs\", \"pkill httpsqs\" and \"kill PID of httpsqs\" to stop httpsqs.\n"
+		   "Use command \"killall httpsqs\", \"pkill httpsqs\" and \"kill `cat /tmp/httpsqs.pid`\" to stop httpsqs.\n"
 		   "Please note that don't use the command \"pkill -9 httpsqs\" and \"kill -9 PID of httpsqs\"!\n"
 		   "\n"
 		   "Please visit \"http://code.google.com/p/httpsqs\" for more help information.\n\n"
@@ -218,6 +226,8 @@ static int httpsqs_maxqueue(const char* httpsqs_input_name, int httpsqs_input_nu
 		sprintf(queue_maxnum, "%d", queue_maxnum_int);
 		tcbdbput2(httpsqs_db_tcbdb, queue_name, queue_maxnum);
 		
+		tcbdbsync(httpsqs_db_tcbdb); /* 实时刷新到磁盘 */
+		
 		free(queue_maxnum);
 		return queue_maxnum_int;
 	}
@@ -241,6 +251,8 @@ static int httpsqs_reset(const char* httpsqs_input_name)
 	memset(queue_name, '\0', 300);
 	sprintf(queue_name, "%s:%s", httpsqs_input_name, "maxqueue");
 	tcbdbout2(httpsqs_db_tcbdb, queue_name);
+	
+	tcbdbsync(httpsqs_db_tcbdb); /* 实时刷新到磁盘 */
 	
 	return 0;
 }
@@ -389,7 +401,8 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 		} else {
 			evhttp_add_header(req->output_headers, "Content-Type", "text/plain");
 		}
-		evhttp_add_header(req->output_headers, "Keep-Alive", "120");
+		evhttp_add_header(req->output_headers, "Keep-Alive", httpsqs_settings_keepalive);
+		evhttp_add_header(req->output_headers, "Cache-Control", "no-cache");
 		//evhttp_add_header(req->output_headers, "Cneonction", "close");
 		
 		/*参数是否存在判断 */
@@ -545,7 +558,18 @@ static void kill_signal(const int sig) {
 	tcbdbsync(httpsqs_db_tcbdb);
 	tcbdbclose(httpsqs_db_tcbdb);
 	tcbdbdel(httpsqs_db_tcbdb);
+	
+	/* 删除PID文件 */
+	remove(httpsqs_settings_pidfile);
+	
     exit(0);
+}
+
+/* 定时信号处理，定时将内存中的内容写入磁盘 */
+static void sync_signal(const int sig) {
+	/* 同步内存数据到磁盘 */
+	tcbdbsync(httpsqs_db_tcbdb);
+	alarm(httpsqs_settings_syncinterval); //间隔httpsqs_settings_syncinterval秒发一次信号
 }
 
 int main(int argc, char **argv)
@@ -556,10 +580,16 @@ int main(int argc, char **argv)
 	int httpsqs_settings_port = 1218;
 	char *httpsqs_settings_datapath = NULL;
 	bool httpsqs_settings_daemon = false;
-	int httpsqs_settings_timeout = 1; /* 单位：秒 */
+	int httpsqs_settings_timeout = 3; /* 单位：秒 */
+	httpsqs_settings_keepalive = "15"; /* 单位：秒 */
+	httpsqs_settings_syncinterval = 5; /* 单位：秒 */
+	int httpsqs_settings_cachenonleaf = 10000; /* 缓存非叶子节点数。单位：条 */
+	int httpsqs_settings_cacheleaf = 20000; /* 缓存叶子节点数。叶子节点缓存数为非叶子节点数的两倍。单位：条 */
+	int httpsqs_settings_mappedmemory = 104857600; /* 单位：字节 */
+	httpsqs_settings_pidfile = "/tmp/httpsqs.pid";
 
     /* process arguments */
-    while ((c = getopt(argc, argv, "l:p:x:t:dh")) != -1) {
+    while ((c = getopt(argc, argv, "l:p:x:t:k:s:c:m:i:dh")) != -1) {
         switch (c) {
         case 'l':
             httpsqs_settings_listen = strdup(optarg);
@@ -583,6 +613,22 @@ int main(int argc, char **argv)
             break;
         case 't':
             httpsqs_settings_timeout = atoi(optarg);
+            break;
+        case 'k':
+            httpsqs_settings_keepalive = strdup(optarg);
+            break;			
+        case 's':
+            httpsqs_settings_syncinterval = atoi(optarg);
+            break;			
+        case 'c':
+            httpsqs_settings_cachenonleaf = atoi(optarg);
+			httpsqs_settings_cacheleaf = httpsqs_settings_cachenonleaf * 2;
+            break;
+        case 'm':
+            httpsqs_settings_mappedmemory = atoi(optarg) * 1024 * 1024; /* 单位：M */
+            break;			
+        case 'i':
+            httpsqs_settings_pidfile = strdup(optarg);
             break;			
         case 'd':
             httpsqs_settings_daemon = true;
@@ -610,8 +656,9 @@ int main(int argc, char **argv)
 	/* 打开数据表 */
 	httpsqs_db_tcbdb = tcbdbnew();
 	tcbdbtune(httpsqs_db_tcbdb, 1024, 2048, 50000000, 8, 10, BDBTLARGE);
-	tcbdbsetxmsiz(httpsqs_db_tcbdb, 104857600); /* 内存缓存大小为100M */
-				
+	tcbdbsetcache(httpsqs_db_tcbdb, httpsqs_settings_cacheleaf, httpsqs_settings_cachenonleaf);
+	tcbdbsetxmsiz(httpsqs_db_tcbdb, httpsqs_settings_mappedmemory); /* 内存缓存大小 */
+					
 	/* 判断表是否能打开 */
 	if(!tcbdbopen(httpsqs_db_tcbdb, httpsqs_settings_dataname, BDBOWRITER|BDBOCREAT)){
 		show_help();
@@ -638,8 +685,14 @@ int main(int argc, char **argv)
         }
 	}
 	
+	/* 将进程号写入PID文件 */
+	FILE *fp_pidfile;
+	fp_pidfile = fopen(httpsqs_settings_pidfile, "w");
+	fprintf(fp_pidfile, "%d\n", getpid());
+	fclose(fp_pidfile);
+	
 	/* 忽略Broken Pipe信号 */
-	signal (SIGPIPE,SIG_IGN);
+	signal(SIGPIPE, SIG_IGN);
 	
 	/* 处理kill信号 */
 	signal (SIGINT, kill_signal);
@@ -647,6 +700,10 @@ int main(int argc, char **argv)
 	signal (SIGQUIT, kill_signal);
 	signal (SIGTERM, kill_signal);
 	signal (SIGHUP, kill_signal);
+	
+	/* 处理定时更新修改的数据到磁盘信号 */
+	signal(SIGALRM, sync_signal);
+	alarm(httpsqs_settings_syncinterval); //间隔httpsqs_settings_syncinterval秒发一次信号
 	
 	/* 请求处理部分 */
     struct evhttp *httpd;
