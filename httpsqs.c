@@ -1,5 +1,5 @@
 /*
-HTTP Simple Queue Service - httpsqs v1.3.20100617
+HTTP Simple Queue Service - httpsqs v1.3.20100621
 Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com
 This is free software, and you are welcome to modify and redistribute it under the New BSD License
 */
@@ -41,7 +41,6 @@ This is free software, and you are welcome to modify and redistribute it under t
 /* 全局设置 */
 TCBDB *httpsqs_db_tcbdb; /* 数据表 */
 int httpsqs_settings_syncinterval; /* 同步更新内容到磁盘的间隔时间 */
-char *httpsqs_settings_keepalive; /* Keep-Alive 时间 */
 char *httpsqs_settings_pidfile; /* PID文件 */
 
 /* 创建多层目录的函数 */
@@ -117,7 +116,7 @@ char *urldecode(char *input_str)
 static void show_help(void)
 {
 	char *b = "--------------------------------------------------------------------------------------------------\n"
-		  "HTTP Simple Queue Service - httpsqs v" VERSION " (June 19, 2010)\n\n"
+		  "HTTP Simple Queue Service - httpsqs v" VERSION " (June 22, 2010)\n\n"
 		  "Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com\n"
 		  "This is free software, and you are welcome to modify and redistribute it under the New BSD License\n"
 		  "\n"
@@ -125,7 +124,6 @@ static void show_help(void)
 		   "-p <num>      TCP port number to listen on (default: 1218)\n"
 		   "-x <path>     database directory (example: /opt/httpsqs/data)\n"
 		   "-t <second>   timeout for an http request (default: 3)\n"
-		   "-k <second>   keep-alive time (default: 15)\n"
 		   "-s <second>   the interval to sync updated contents to the disk (default: 5)\n"
 		   "-c <num>      the maximum number of non-leaf nodes to be cached (default: 10000)\n"
 		   "-m <size>     database memory cache size in MB (default: 100)\n"
@@ -271,6 +269,15 @@ char *httpsqs_view(const char* httpsqs_input_name, int pos)
 	return queue_value;
 }
 
+/* 修改定时更新内存内容到磁盘的间隔时间，返回间隔时间（秒） */
+static int httpsqs_synctime(int httpsqs_input_num)
+{
+	if (httpsqs_input_num >= 1) {
+		httpsqs_settings_syncinterval = httpsqs_input_num;
+	}
+	return httpsqs_settings_syncinterval;
+}
+
 /* 获取本次“入队列”操作的队列写入点 */
 static int httpsqs_now_putpos(const char* httpsqs_input_name)
 {
@@ -401,7 +408,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 		} else {
 			evhttp_add_header(req->output_headers, "Content-Type", "text/plain");
 		}
-		evhttp_add_header(req->output_headers, "Keep-Alive", httpsqs_settings_keepalive);
+		evhttp_add_header(req->output_headers, "Connection", "keep-alive");
 		evhttp_add_header(req->output_headers, "Cache-Control", "no-cache");
 		//evhttp_add_header(req->output_headers, "Cneonction", "close");
 		
@@ -483,7 +490,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 					}
 				}
 			}
-			/* 查看队列状态 */
+			/* 查看队列状态（普通浏览方式） */
 			else if (strcmp(httpsqs_input_opt, "status") == 0) {
 				int maxqueue = httpsqs_read_maxqueue((char *)httpsqs_input_name); /* 最大队列数量 */
 				int putpos = httpsqs_read_putpos((char *)httpsqs_input_name); /* 入队列写入位置 */
@@ -508,6 +515,25 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 				evbuffer_add_printf(buf, "Get position of queue (%s): %d\n", get_times, getpos);
 				evbuffer_add_printf(buf, "Number of unread queue: %d\n", ungetnum);
 			}
+			/* 查看队列状态（JSON方式，方便客服端程序处理） */
+			else if (strcmp(httpsqs_input_opt, "status_json") == 0) {
+				int maxqueue = httpsqs_read_maxqueue((char *)httpsqs_input_name); /* 最大队列数量 */
+				int putpos = httpsqs_read_putpos((char *)httpsqs_input_name); /* 入队列写入位置 */
+				int getpos = httpsqs_read_getpos((char *)httpsqs_input_name); /* 出队列读取位置 */
+				int ungetnum;
+				const char *put_times;
+				const char *get_times;
+				if (putpos >= getpos) {
+					ungetnum = abs(putpos - getpos); /* 尚未出队列条数 */
+					put_times = "1";
+					get_times = "1";
+				} else if (putpos < getpos) {
+					ungetnum = abs(maxqueue - getpos + putpos); /* 尚未出队列条数 */
+					put_times = "2";
+					get_times = "1";
+				}
+				evbuffer_add_printf(buf, "{\"name\":\"%s\",\"maxqueue\":%d,\"putpos\":%d,\"puttimes\":%s,\"getpos\":%d,\"gettimes\":%s,\"unread\":%d}\n", httpsqs_input_name, maxqueue, putpos, put_times, getpos, get_times, ungetnum);
+			}			
 			/* 查看单条队列内容 */
 			else if (strcmp(httpsqs_input_opt, "view") == 0 && httpsqs_input_pos >= 1 && httpsqs_input_pos <= 1000000000) {
 				char *httpsqs_output_value;
@@ -535,6 +561,16 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 					/* 设置取消 */
 					evbuffer_add_printf(buf, "%s", "HTTPSQS_MAXQUEUE_CANCEL");
 				}
+			}
+			/* 设置定时更新内存内容到磁盘的间隔时间，最小值为1秒，最大值为10亿秒 */
+			else if (strcmp(httpsqs_input_opt, "synctime") == 0 && httpsqs_input_num >= 1 && httpsqs_input_num <= 1000000000) {
+				if (httpsqs_synctime(httpsqs_input_num) >= 1) {
+					/* 设置成功 */
+					evbuffer_add_printf(buf, "%s", "HTTPSQS_SYNCTIME_OK");
+				} else {
+					/* 设置取消 */
+					evbuffer_add_printf(buf, "%s", "HTTPSQS_SYNCTIME_CANCEL");
+				}				
 			} else {
 				/* 命令错误 */
 				evbuffer_add_printf(buf, "%s", "HTTPSQS_ERROR");				
@@ -581,7 +617,6 @@ int main(int argc, char **argv)
 	char *httpsqs_settings_datapath = NULL;
 	bool httpsqs_settings_daemon = false;
 	int httpsqs_settings_timeout = 3; /* 单位：秒 */
-	httpsqs_settings_keepalive = "15"; /* 单位：秒 */
 	httpsqs_settings_syncinterval = 5; /* 单位：秒 */
 	int httpsqs_settings_cachenonleaf = 10000; /* 缓存非叶子节点数。单位：条 */
 	int httpsqs_settings_cacheleaf = 20000; /* 缓存叶子节点数。叶子节点缓存数为非叶子节点数的两倍。单位：条 */
@@ -589,7 +624,7 @@ int main(int argc, char **argv)
 	httpsqs_settings_pidfile = "/tmp/httpsqs.pid";
 
     /* process arguments */
-    while ((c = getopt(argc, argv, "l:p:x:t:k:s:c:m:i:dh")) != -1) {
+    while ((c = getopt(argc, argv, "l:p:x:t:s:c:m:i:dh")) != -1) {
         switch (c) {
         case 'l':
             httpsqs_settings_listen = strdup(optarg);
@@ -613,10 +648,7 @@ int main(int argc, char **argv)
             break;
         case 't':
             httpsqs_settings_timeout = atoi(optarg);
-            break;
-        case 'k':
-            httpsqs_settings_keepalive = strdup(optarg);
-            break;			
+            break;		
         case 's':
             httpsqs_settings_syncinterval = atoi(optarg);
             break;			

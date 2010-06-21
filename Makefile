@@ -1,6 +1,6 @@
 # Makefile for httpsqs
 CC=gcc
-CFLAGS=-O2 -Wall -levent -ltokyocabinet -lz -lbz2 -lrt -lpthread -lm -lc
+CFLAGS=-O2 -Wall -levent -ltokyocabinet -lz -lrt -lpthread -lm -lc
 
 httpsqs: httpsqs.c
 	$(CC) $(CFLAGS) httpsqs.c -o httpsqs
