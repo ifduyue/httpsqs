@@ -1,7 +1,7 @@
 <?php
 /*
 ----------------------------------------------------------------------------------------------------------------
-HTTP Simple Queue Service - httpsqs client class for PHP v1.2
+HTTP Simple Queue Service - httpsqs client class for PHP v1.3
 
 Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com
 This is free software, and you are welcome to modify and redistribute it under the New BSD License
@@ -33,12 +33,14 @@ $result = $httpsqs->pmaxqueue($host, $port, $charset, $name, $num); //7. Change 
 ----------------------------------------------------------------------------------------------------------------
 */
 
+$httpsqs_psocket = false;
+
 class httpsqs
 {
     function http_get($host, $port, $query)
     {
-        $fp = fsockopen($host, $port, $errno, $errstr, 1);
-        if (!$fp)
+        $httpsqs_socket = fsockopen($host, $port, $errno, $errstr, 5);
+        if (!$httpsqs_socket)
         {
             return false;
         }
@@ -46,12 +48,12 @@ class httpsqs
         $out .= "Host: ${host}\r\n";
         $out .= "Connection: close\r\n";
         $out .= "\r\n";
-        fwrite($fp, $out);
-        $line = trim(fgets($fp));
-        $header .= $line;
+        fwrite($httpsqs_socket, $out);
+        $line = trim(fgets($httpsqs_socket));
+        $header = $line;
         list($proto, $rcode, $result) = explode(" ", $line);
         $len = -1;
-        while (($line = trim(fgets($fp))) != "")
+        while (($line = trim(fgets($httpsqs_socket))) != "")
         {
             $header .= $line;
             if (strstr($line, "Content-Length:"))
@@ -61,18 +63,14 @@ class httpsqs
             if (strstr($line, "Pos:"))
             {
                 list($pos_key, $pos_value) = explode(" ", $line);
-            }			
-            if (strstr($line, "Connection: close"))
-            {
-                $close = true;
             }
         }
         if ($len < 0)
         {
             return false;
         }
-        $body = @fread($fp, $len);
-        if ($close) fclose($fp);
+        $body = @fread($httpsqs_socket, $len);
+        fclose($httpsqs_socket);
 		$result_array["pos"] = (int)$pos_value;
 		$result_array["data"] = $body;
         return $result_array;
@@ -80,8 +78,8 @@ class httpsqs
 
     function http_post($host, $port, $query, $body)
     {
-        $fp = fsockopen($host, $port, $errno, $errstr, 1);
-        if (!$fp)
+        $httpsqs_socket = fsockopen($host, $port, $errno, $errstr, 5);
+        if (!$httpsqs_socket)
         {
             return false;
         }
@@ -91,12 +89,12 @@ class httpsqs
         $out .= "Connection: close\r\n";
         $out .= "\r\n";
         $out .= $body;
-        fwrite($fp, $out);
-        $line = trim(fgets($fp));
-        $header .= $line;
+        fwrite($httpsqs_socket, $out);
+        $line = trim(fgets($httpsqs_socket));
+        $header = $line;
         list($proto, $rcode, $result) = explode(" ", $line);
         $len = -1;
-        while (($line = trim(fgets($fp))) != "")
+        while (($line = trim(fgets($httpsqs_socket))) != "")
         {
             $header .= $line;
             if (strstr($line, "Content-Length:"))
@@ -106,18 +104,14 @@ class httpsqs
             if (strstr($line, "Pos:"))
             {
                 list($pos_key, $pos_value) = explode(" ", $line);
-            }			
-            if (strstr($line, "Connection: close"))
-            {
-                $close = true;
             }
         }
         if ($len < 0)
         {
             return false;
         }
-        $body = @fread($fp, $len);
-        if ($close) fclose($fp);
+        $body = @fread($httpsqs_socket, $len);
+        fclose($httpsqs_socket);
 		$result_array["pos"] = (int)$pos_value;
 		$result_array["data"] = $body;
         return $result_array;
@@ -125,8 +119,13 @@ class httpsqs
 	
     function http_pget($host, $port, $query)
     {
-        $fp = pfsockopen($host, $port, $errno, $errstr, 1);
-        if (!$fp)
+		global $httpsqs_psocket;
+		$hostport = md5($host.":".$port);
+        if (!$httpsqs_psocket[$hostport])
+        {
+			$httpsqs_psocket[$hostport] = pfsockopen($host, $port, $errno, $errstr, 5);
+        }
+        if (!$httpsqs_psocket[$hostport])
         {
             return false;
         }
@@ -134,12 +133,12 @@ class httpsqs
         $out .= "Host: ${host}\r\n";
         $out .= "Connection: Keep-Alive\r\n";
         $out .= "\r\n";
-        fwrite($fp, $out);
-        $line = trim(fgets($fp));
-        $header .= $line;
+        fwrite($httpsqs_psocket[$hostport], $out);
+        $line = trim(fgets($httpsqs_psocket[$hostport]));
+        $header = $line;
         list($proto, $rcode, $result) = explode(" ", $line);
         $len = -1;
-        while (($line = trim(fgets($fp))) != "")
+        while (($line = trim(fgets($httpsqs_psocket[$hostport]))) != "")
         {
             $header .= $line;
             if (strstr($line, "Content-Length:"))
@@ -150,17 +149,12 @@ class httpsqs
             {
                 list($pos_key, $pos_value) = explode(" ", $line);
             }			
-            if (strstr($line, "Connection: close"))
-            {
-                $close = true;
-            }
         }
         if ($len < 0)
         {
             return false;
         }
-        $body = @fread($fp, $len);
-        if ($close) fclose($fp);
+        $body = @fread($httpsqs_psocket[$hostport], $len);
 		$result_array["pos"] = (int)$pos_value;
 		$result_array["data"] = $body;
         return $result_array;
@@ -168,8 +162,13 @@ class httpsqs
 
     function http_ppost($host, $port, $query, $body)
     {
-        $fp = pfsockopen($host, $port, $errno, $errstr, 1);
-        if (!$fp)
+		global $httpsqs_psocket;
+		$hostport = md5($host.":".$port);
+        if (!$httpsqs_psocket[$hostport])
+        {
+			$httpsqs_psocket[$hostport] = pfsockopen($host, $port, $errno, $errstr, 5);
+        }
+        if (!$httpsqs_psocket[$hostport])
         {
             return false;
         }
@@ -179,12 +178,12 @@ class httpsqs
         $out .= "Connection: Keep-Alive\r\n";
         $out .= "\r\n";
         $out .= $body;
-        fwrite($fp, $out);
-        $line = trim(fgets($fp));
-        $header .= $line;
+        fwrite($httpsqs_psocket[$hostport], $out);
+        $line = trim(fgets($httpsqs_psocket[$hostport]));
+        $header = $line;
         list($proto, $rcode, $result) = explode(" ", $line);
         $len = -1;
-        while (($line = trim(fgets($fp))) != "")
+        while (($line = trim(fgets($httpsqs_psocket[$hostport]))) != "")
         {
             $header .= $line;
             if (strstr($line, "Content-Length:"))
@@ -194,18 +193,13 @@ class httpsqs
             if (strstr($line, "Pos:"))
             {
                 list($pos_key, $pos_value) = explode(" ", $line);
-            }			
-            if (strstr($line, "Connection: close"))
-            {
-                $close = true;
             }
         }
         if ($len < 0)
         {
             return false;
         }
-        $body = @fread($fp, $len);
-        if ($close) fclose($fp);
+        $body = @fread($httpsqs_psocket[$hostport], $len);
 		$result_array["pos"] = (int)$pos_value;
 		$result_array["data"] = $body;
         return $result_array;
@@ -276,6 +270,24 @@ class httpsqs
         return false;
     }
 	
+    function status_json($host, $port, $charset='utf-8', $name)
+    {
+    	$result = $this->http_get($host, $port, "/?charset=".$charset."&name=".$name."&opt=status_json");
+		if ($result["data"] == "HTTPSQS_ERROR" || $result["data"] == false) {
+			return false;
+		}
+        return $result["data"];
+    }
+
+    function synctime($host, $port, $charset='utf-8', $name, $num)
+    {
+    	$result = $this->http_get($host, $port, "/?charset=".$charset."&name=".$name."&opt=synctime&num=".$num);
+		if ($result["data"] == "HTTPSQS_SYNCTIME_OK") {
+			return true;
+		}
+        return false;
+    }	
+	
     function pput($host, $port, $charset='utf-8', $name, $data)
     {
     	$result = $this->http_ppost($host, $port, "/?charset=".$charset."&name=".$name."&opt=put", $data);
@@ -340,5 +352,23 @@ class httpsqs
 		}
         return false;
     }
+	
+    function pstatus_json($host, $port, $charset='utf-8', $name)
+    {
+    	$result = $this->http_pget($host, $port, "/?charset=".$charset."&name=".$name."&opt=status_json");
+		if ($result["data"] == "HTTPSQS_ERROR" || $result["data"] == false) {
+			return false;
+		}
+        return $result["data"];
+    }
+
+    function psynctime($host, $port, $charset='utf-8', $name, $num)
+    {
+    	$result = $this->http_pget($host, $port, "/?charset=".$charset."&name=".$name."&opt=synctime&num=".$num);
+		if ($result["data"] == "HTTPSQS_SYNCTIME_OK") {
+			return true;
+		}
+        return false;
+    }	
 }
 ?>
