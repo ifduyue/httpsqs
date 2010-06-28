@@ -742,6 +742,10 @@ int main(int argc, char **argv)
 
     event_init();
     httpd = evhttp_start(httpsqs_settings_listen, httpsqs_settings_port);
+	if (httpd == NULL) {
+		fprintf(stderr, "Error: Unable to listen on %s:%d\n\n", httpsqs_settings_listen, httpsqs_settings_port);		
+		exit(1);		
+	}
 	evhttp_set_timeout(httpd, httpsqs_settings_timeout);
 
     /* Set a callback for requests to "/specific". */
