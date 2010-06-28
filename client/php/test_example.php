@@ -36,18 +36,28 @@ echo "###7.status result:\r\n";
 var_dump($result);
 echo "\r\n\r\n";
 
+$result = $httpsqs->status_json("127.0.0.1", 1218, "utf-8", "your_queue_name1");
+echo "###8.status_json result:\r\n";
+var_dump($result);
+echo "\r\n\r\n";
+
 $result = $httpsqs->view("127.0.0.1", 1218, "utf-8", "your_queue_name1", 1);
-echo "###8.view result:\r\n";
+echo "###9.view result:\r\n";
 var_dump($result);
 echo "\r\n\r\n";
 
 $result = $httpsqs->reset("127.0.0.1", 1218, "utf-8", "your_queue_name1");
-echo "###9.reset result:\r\n";
+echo "###10.reset result:\r\n";
 var_dump($result);
 echo "\r\n\r\n";
 
 $result = $httpsqs->maxqueue("127.0.0.1", 1218, "utf-8", "your_queue_name1", 5000000);
-echo "###10.maxqueue result:\r\n";
+echo "###11.maxqueue result:\r\n";
+var_dump($result);
+echo "\r\n\r\n";
+
+$result = $httpsqs->synctime("127.0.0.1", 1218, "utf-8", "your_queue_name1", 10);
+echo "###12.synctime result:\r\n";
 var_dump($result);
 echo "\r\n\r\n";
 ?>
