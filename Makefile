@@ -1,9 +1,9 @@
 # Makefile for httpsqs
 CC=gcc
-CFLAGS=-O2 -Wall -levent -ltokyocabinet -lz -lrt -lpthread -lm -lc
+CFLAGS=-L/usr/local/libevent-1.4.14b-stable/lib/ -levent -L/usr/local/tokyocabinet-1.4.45/lib/ -ltokyocabinet -I/usr/local/libevent-1.4.14b-stable/include/ -I/usr/local/tokyocabinet-1.4.45/include/ -lz -lbz2 -lrt -lpthread -lm -lc -O2
 
 httpsqs: httpsqs.c
-	$(CC) $(CFLAGS) httpsqs.c -o httpsqs
+	$(CC) -o httpsqs httpsqs.c $(CFLAGS)
 
 clean: httpsqs
 	rm -f httpsqs
