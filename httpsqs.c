@@ -1,5 +1,5 @@
 /*
-HTTP Simple Queue Service - httpsqs v1.3.20100621
+HTTP Simple Queue Service - httpsqs v1.4.20100713
 Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com
 This is free software, and you are welcome to modify and redistribute it under the New BSD License
 */
@@ -36,7 +36,7 @@ This is free software, and you are welcome to modify and redistribute it under t
 #include <event.h>
 #include <evhttp.h>
 
-#define VERSION "1.3.1"
+#define VERSION "1.4"
 
 /* 全局设置 */
 TCBDB *httpsqs_db_tcbdb; /* 数据表 */
@@ -116,7 +116,7 @@ char *urldecode(char *input_str)
 static void show_help(void)
 {
 	char *b = "--------------------------------------------------------------------------------------------------\n"
-		  "HTTP Simple Queue Service - httpsqs v" VERSION " (July 12, 2010)\n\n"
+		  "HTTP Simple Queue Service - httpsqs v" VERSION " (July 13, 2010)\n\n"
 		  "Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com\n"
 		  "This is free software, and you are welcome to modify and redistribute it under the New BSD License\n"
 		  "\n"
@@ -125,7 +125,7 @@ static void show_help(void)
 		   "-x <path>     database directory (example: /opt/httpsqs/data)\n"
 		   "-t <second>   timeout for an http request (default: 3)\n"
 		   "-s <second>   the interval to sync updated contents to the disk (default: 5)\n"
-		   "-c <num>      the maximum number of non-leaf nodes to be cached (default: 1024)\n"
+		   "-c <num>      the maximum number of non-leaf nodes to be cached (default: 10000)\n"
 		   "-m <size>     database memory cache size in MB (default: 100)\n"
 		   "-i <file>     save PID in <file> (default: /tmp/httpsqs.pid)\n"
 		   "-d            run as a daemon\n"
@@ -453,7 +453,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 						memset(buffer_data, '\0', buffer_data_len + 1);
 						memcpy (buffer_data, httpsqs_input_data, buffer_data_len);
 						httpsqs_input_postbuffer = urldecode(buffer_data);
-						tcbdbput2(httpsqs_db_tcbdb, queue_name, buffer_data);
+						tcbdbput2(httpsqs_db_tcbdb, queue_name, httpsqs_input_postbuffer);
 						memset(queue_name, '\0', 300);
 						sprintf(queue_name, "%d", queue_put_value);					
 						evhttp_add_header(req->output_headers, "Pos", queue_name);
@@ -586,6 +586,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 		/* 内存释放 */
 		evhttp_clear_headers(&httpsqs_http_query);
 		evbuffer_free(buf);
+		evhttp_request_free(req);
 }
 
 /* 信号处理 */
@@ -618,7 +619,7 @@ int main(int argc, char **argv)
 	bool httpsqs_settings_daemon = false;
 	int httpsqs_settings_timeout = 3; /* 单位：秒 */
 	httpsqs_settings_syncinterval = 5; /* 单位：秒 */
-	int httpsqs_settings_cachenonleaf = 1024; /* 缓存非叶子节点数。单位：条 */
+	int httpsqs_settings_cachenonleaf = 10000; /* 缓存非叶子节点数。单位：条 */
 	int httpsqs_settings_cacheleaf = 20000; /* 缓存叶子节点数。叶子节点缓存数为非叶子节点数的两倍。单位：条 */
 	int httpsqs_settings_mappedmemory = 104857600; /* 单位：字节 */
 	httpsqs_settings_pidfile = "/tmp/httpsqs.pid";
