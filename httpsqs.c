@@ -1,5 +1,5 @@
 /*
-HTTP Simple Queue Service - httpsqs v1.4.20100713
+HTTP Simple Queue Service - httpsqs v1.4.20100928
 Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com
 This is free software, and you are welcome to modify and redistribute it under the New BSD License
 */
@@ -116,7 +116,7 @@ char *urldecode(char *input_str)
 static void show_help(void)
 {
 	char *b = "--------------------------------------------------------------------------------------------------\n"
-		  "HTTP Simple Queue Service - httpsqs v" VERSION " (July 13, 2010)\n\n"
+		  "HTTP Simple Queue Service - httpsqs v" VERSION " (September 28, 2010)\n\n"
 		  "Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com\n"
 		  "This is free software, and you are welcome to modify and redistribute it under the New BSD License\n"
 		  "\n"
@@ -125,7 +125,7 @@ static void show_help(void)
 		   "-x <path>     database directory (example: /opt/httpsqs/data)\n"
 		   "-t <second>   timeout for an http request (default: 3)\n"
 		   "-s <second>   the interval to sync updated contents to the disk (default: 5)\n"
-		   "-c <num>      the maximum number of non-leaf nodes to be cached (default: 10000)\n"
+		   "-c <num>      the maximum number of non-leaf nodes to be cached (default: 1024)\n"
 		   "-m <size>     database memory cache size in MB (default: 100)\n"
 		   "-i <file>     save PID in <file> (default: /tmp/httpsqs.pid)\n"
 		   "-d            run as a daemon\n"
@@ -217,7 +217,7 @@ static int httpsqs_maxqueue(const char* httpsqs_input_name, int httpsqs_input_nu
 	/* 设置的最大的队列数量必须大于等于”当前队列写入位置点“和”当前队列读取位置点“，并且”当前队列写入位置点“必须大于等于”当前队列读取位置点“ */
 	if (queue_maxnum_int >= queue_put_value && queue_maxnum_int >= queue_get_value && queue_put_value >= queue_get_value) {
 		char queue_name[300]; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
-		char *queue_maxnum = (char *)malloc(16);
+		char queue_maxnum[16];
 		memset(queue_name, '\0', 300);
 		memset(queue_maxnum, '\0', 16);
 		sprintf(queue_name, "%s:%s", httpsqs_input_name, "maxqueue");
@@ -226,7 +226,6 @@ static int httpsqs_maxqueue(const char* httpsqs_input_name, int httpsqs_input_nu
 		
 		tcbdbsync(httpsqs_db_tcbdb); /* 实时刷新到磁盘 */
 		
-		free(queue_maxnum);
 		return queue_maxnum_int;
 	}
 	
@@ -285,7 +284,7 @@ static int httpsqs_now_putpos(const char* httpsqs_input_name)
 	int queue_put_value = 0;
 	int queue_get_value = 0;
 	char queue_name[300]; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
-	char *queue_input = (char *)malloc(32);
+	char queue_input[32];
 	
 	/* 获取最大队列数量 */
 	maxqueue_num = httpsqs_read_maxqueue(httpsqs_input_name);
@@ -311,8 +310,7 @@ static int httpsqs_now_putpos(const char* httpsqs_input_name)
 	} else { /* 队列写入位置点加1后的值，回写入数据库 */
 		memset(queue_input, '\0', 32);
 		sprintf(queue_input, "%d", queue_put_value);
-		tcbdbput2(httpsqs_db_tcbdb, queue_name, queue_input);
-		free(queue_input);
+		tcbdbput2(httpsqs_db_tcbdb, queue_name, (char *)queue_input);
 	}
 	
 	return queue_put_value;
@@ -345,19 +343,17 @@ static int httpsqs_now_getpos(const char* httpsqs_input_name)
 	/* 如果队列的读取值（出队列）小于队列的写入值（入队列） */
 	} else if (queue_get_value < queue_put_value) {
 		queue_get_value = queue_get_value + 1;
-		char *queue_input = (char *)malloc(32);		
+		char queue_input[32];
 		memset(queue_input, '\0', 32);
 		sprintf(queue_input, "%d", queue_get_value);
 		tcbdbput2(httpsqs_db_tcbdb, queue_name, queue_input);
-		free(queue_input);
 	/* 如果队列的读取值（出队列）大于队列的写入值（入队列），并且队列的读取值（出队列）小于最大队列数量 */
 	} else if (queue_get_value > queue_put_value && queue_get_value < maxqueue_num) {
 		queue_get_value = queue_get_value + 1;
-		char *queue_input = (char *)malloc(32);		
+		char queue_input[32];
 		memset(queue_input, '\0', 32);
 		sprintf(queue_input, "%d", queue_get_value);
 		tcbdbput2(httpsqs_db_tcbdb, queue_name, queue_input);
-		free(queue_input);
 	/* 如果队列的读取值（出队列）大于队列的写入值（入队列），并且队列的读取值（出队列）等于最大队列数量 */
 	} else if (queue_get_value > queue_put_value && queue_get_value == maxqueue_num) {
 		queue_get_value = 1;
@@ -400,11 +396,10 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 		
 		/* 返回给用户的Header头信息 */
 		if (httpsqs_input_charset != NULL && strlen(httpsqs_input_charset) <= 40) {
-			char *content_type = (char *)malloc(64);
+			char content_type[64];
 			memset(content_type, '\0', 64);
 			sprintf(content_type, "text/plain; charset=%s", httpsqs_input_charset);
 			evhttp_add_header(req->output_headers, "Content-Type", content_type);
-			free(content_type);
 		} else {
 			evhttp_add_header(req->output_headers, "Content-Type", "text/plain");
 		}
@@ -426,7 +421,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 						memset(queue_name, '\0', 300);
 						sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_put_value);
 						char *httpsqs_input_postbuffer;					
-						char *buffer_data = (char *)malloc(buffer_data_len + 1);
+						char *buffer_data = (char *)tcmalloc(buffer_data_len + 1);
 						memset(buffer_data, '\0', buffer_data_len + 1);
 						memcpy (buffer_data, EVBUFFER_DATA(req->input_buffer), buffer_data_len);
 						httpsqs_input_postbuffer = urldecode(buffer_data);
@@ -449,7 +444,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 						sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_put_value);				
 						buffer_data_len = strlen(httpsqs_input_data);
 						char *httpsqs_input_postbuffer;
-						char *buffer_data = (char *)malloc(buffer_data_len + 1);
+						char *buffer_data = (char *)tcmalloc(buffer_data_len + 1);					
 						memset(buffer_data, '\0', buffer_data_len + 1);
 						memcpy (buffer_data, httpsqs_input_data, buffer_data_len);
 						httpsqs_input_postbuffer = urldecode(buffer_data);
@@ -586,7 +581,6 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 		/* 内存释放 */
 		evhttp_clear_headers(&httpsqs_http_query);
 		evbuffer_free(buf);
-		evhttp_request_free(req);
 }
 
 /* 信号处理 */
@@ -619,8 +613,8 @@ int main(int argc, char **argv)
 	bool httpsqs_settings_daemon = false;
 	int httpsqs_settings_timeout = 3; /* 单位：秒 */
 	httpsqs_settings_syncinterval = 5; /* 单位：秒 */
-	int httpsqs_settings_cachenonleaf = 10000; /* 缓存非叶子节点数。单位：条 */
-	int httpsqs_settings_cacheleaf = 20000; /* 缓存叶子节点数。叶子节点缓存数为非叶子节点数的两倍。单位：条 */
+	int httpsqs_settings_cachenonleaf = 1024; /* 缓存非叶子节点数。单位：条 */
+	int httpsqs_settings_cacheleaf = 2048; /* 缓存叶子节点数。叶子节点缓存数为非叶子节点数的两倍。单位：条 */
 	int httpsqs_settings_mappedmemory = 104857600; /* 单位：字节 */
 	httpsqs_settings_pidfile = "/tmp/httpsqs.pid";
 
@@ -682,7 +676,7 @@ int main(int argc, char **argv)
 	
 	/* 数据表路径 */
 	int httpsqs_settings_dataname_len = 1024;
-	char *httpsqs_settings_dataname = (char *)malloc(httpsqs_settings_dataname_len);
+	char *httpsqs_settings_dataname = (char *)tcmalloc(httpsqs_settings_dataname_len);
 	memset(httpsqs_settings_dataname, '\0', httpsqs_settings_dataname_len);
 	sprintf(httpsqs_settings_dataname, "%s/httpsqs.db", httpsqs_settings_datapath);
 
