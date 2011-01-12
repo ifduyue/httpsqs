@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-from lib.httpsqs_client import httpsqs
+from httpsqs_client import httpsqs
 
 sqs = httpsqs('10.249.200.168', '1218', 'test')
 
