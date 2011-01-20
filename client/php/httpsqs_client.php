@@ -32,7 +32,7 @@ $result = $httpsqs->pview($host, $port, $charset, $name, $pos); //6. View the co
 $result = $httpsqs->preset($host, $port, $charset, $name); //7. Reset the queue. If reset successful, return boolean: true. If an error occurs, return boolean: false
 $result = $httpsqs->pmaxqueue($host, $port, $charset, $name, $num); //8. Change the maximum queue length of per-queue. If change the maximum queue length successful, return boolean: true. If  it be cancelled, return boolean: false
 $result = $httpsqs->psynctime($host, $port, $charset, $name, $num); //9. Change the interval to sync updated contents to the disk. If change the interval successful, return boolean: true. If  it be cancelled, return boolean: false
-?>
+
 ----------------------------------------------------------------------------------------------------------------
 */
 
