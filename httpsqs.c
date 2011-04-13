@@ -48,6 +48,7 @@ This is free software, and you are welcome to modify and redistribute it under t
 TCBDB *httpsqs_db_tcbdb; /* 数据表 */
 int httpsqs_settings_syncinterval; /* 同步更新内容到磁盘的间隔时间 */
 char *httpsqs_settings_pidfile; /* PID文件 */
+char *httpsqs_settings_auth; /* 验证密码 */
 
 /* 创建多层目录的函数 */
 void create_multilayer_dir( char *muldir ) 
@@ -347,6 +348,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 		free(decode_uri);
 		
 		/* 接收GET表单参数 */
+		const char *httpsqs_input_auth = evhttp_find_header (&httpsqs_http_query, "auth"); /* 队列名称 */
 		const char *httpsqs_input_name = evhttp_find_header (&httpsqs_http_query, "name"); /* 队列名称 */
 		const char *httpsqs_input_charset = evhttp_find_header (&httpsqs_http_query, "charset"); /* 操作类别 */
 		const char *httpsqs_input_opt = evhttp_find_header (&httpsqs_http_query, "opt"); /* 操作类别 */
@@ -355,12 +357,6 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 		const char *httpsqs_input_num_tmp = evhttp_find_header (&httpsqs_http_query, "num"); /* 队列总长度 字符型 */
 		int httpsqs_input_pos = 0;
 		int httpsqs_input_num = 0;
-		if (httpsqs_input_pos_tmp != NULL) {
-			httpsqs_input_pos = atoi(httpsqs_input_pos_tmp); /* 队列位置点 数值型 */
-		}
-		if (httpsqs_input_num_tmp != NULL) {
-			httpsqs_input_num = atoi(httpsqs_input_num_tmp); /* 队列总长度 数值型 */
-		}		
 		
 		/* 返回给用户的Header头信息 */
 		if (httpsqs_input_charset != NULL && strlen(httpsqs_input_charset) <= 40) {
@@ -372,171 +368,200 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
 		}
 		evhttp_add_header(req->output_headers, "Connection", "keep-alive");
 		evhttp_add_header(req->output_headers, "Cache-Control", "no-cache");
-		//evhttp_add_header(req->output_headers, "Connection", "close");
+		//evhttp_add_header(req->output_headers, "Connection", "close");		
 		
-		/*参数是否存在判断 */
-		if (httpsqs_input_name != NULL && httpsqs_input_opt != NULL && strlen(httpsqs_input_name) <= 256) {
-			/* 入队列 */
-			if (strcmp(httpsqs_input_opt, "put") == 0) {
-				/* 优先接收POST正文信息 */
-				int buffer_data_len;
-				buffer_data_len = EVBUFFER_LENGTH(req->input_buffer);
-				if (buffer_data_len > 0) {
-					int queue_put_value = httpsqs_now_putpos((char *)httpsqs_input_name);
-					if (queue_put_value > 0) {
-						char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
-						sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_put_value);
-						char *httpsqs_input_postbuffer;					
-						char *buffer_data = (char *)tccalloc(1, buffer_data_len + 1);
-						memcpy (buffer_data, EVBUFFER_DATA(req->input_buffer), buffer_data_len);
-						httpsqs_input_postbuffer = urldecode(buffer_data);
-						tcbdbput2(httpsqs_db_tcbdb, queue_name, httpsqs_input_postbuffer);
-						memset(queue_name, '\0', 300);
-						sprintf(queue_name, "%d", queue_put_value);					
-						evhttp_add_header(req->output_headers, "Pos", queue_name);
-						evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_OK");
-						free(httpsqs_input_postbuffer);
-						free(buffer_data);
-					} else {
-						evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_END");
-					}
-				/* 如果POST正文无内容，则取URL中data参数的值 */
-				} else if (httpsqs_input_data != NULL) {
-					int queue_put_value = httpsqs_now_putpos((char *)httpsqs_input_name);
-					if (queue_put_value > 0) {
-						char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
-						sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_put_value);				
-						buffer_data_len = strlen(httpsqs_input_data);
-						char *httpsqs_input_postbuffer;
-						char *buffer_data = (char *)tccalloc(1, buffer_data_len + 1);					
-						memcpy (buffer_data, httpsqs_input_data, buffer_data_len);
-						httpsqs_input_postbuffer = urldecode(buffer_data);
-						tcbdbput2(httpsqs_db_tcbdb, queue_name, httpsqs_input_postbuffer);
-						memset(queue_name, '\0', 300);
-						sprintf(queue_name, "%d", queue_put_value);					
-						evhttp_add_header(req->output_headers, "Pos", queue_name);
-						evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_OK");
-						free(httpsqs_input_postbuffer);
-						free(buffer_data);
-					} else {
-						evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_END");
-					}
-				} else {
-					evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_ERROR");
-				}
-			}
-			/* 出队列 */
-			else if (strcmp(httpsqs_input_opt, "get") == 0) {
-				int queue_get_value = 0;
-				queue_get_value = httpsqs_now_getpos((char *)httpsqs_input_name);
-				if (queue_get_value == 0) {
-					evbuffer_add_printf(buf, "%s", "HTTPSQS_GET_END");
-				} else {
-					char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
-					sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_get_value);
-					char *httpsqs_output_value;
-					httpsqs_output_value = tcbdbget2(httpsqs_db_tcbdb, queue_name);
-					if (httpsqs_output_value) {
-						memset(queue_name, '\0', 300);
-						sprintf(queue_name, "%d", queue_get_value);	
-						evhttp_add_header(req->output_headers, "Pos", queue_name);
-						evbuffer_add_printf(buf, "%s", httpsqs_output_value);
-						free(httpsqs_output_value);
-					} else {
-						evbuffer_add_printf(buf, "%s", "HTTPSQS_GET_END");
-					}
-				}
-			}
-			/* 查看队列状态（普通浏览方式） */
-			else if (strcmp(httpsqs_input_opt, "status") == 0) {
-				int maxqueue = httpsqs_read_maxqueue((char *)httpsqs_input_name); /* 最大队列数量 */
-				int putpos = httpsqs_read_putpos((char *)httpsqs_input_name); /* 入队列写入位置 */
-				int getpos = httpsqs_read_getpos((char *)httpsqs_input_name); /* 出队列读取位置 */
-				int ungetnum;
-				const char *put_times;
-				const char *get_times;
-				if (putpos >= getpos) {
-					ungetnum = abs(putpos - getpos); /* 尚未出队列条数 */
-					put_times = "1st lap";
-					get_times = "1st lap";
-				} else if (putpos < getpos) {
-					ungetnum = abs(maxqueue - getpos + putpos); /* 尚未出队列条数 */
-					put_times = "2nd lap";
-					get_times = "1st lap";
-				}
-				evbuffer_add_printf(buf, "HTTP Simple Queue Service v%s\n", VERSION);
-				evbuffer_add_printf(buf, "------------------------------\n");
-				evbuffer_add_printf(buf, "Queue Name: %s\n", httpsqs_input_name);
-				evbuffer_add_printf(buf, "Maximum number of queues: %d\n", maxqueue);
-				evbuffer_add_printf(buf, "Put position of queue (%s): %d\n", put_times, putpos);
-				evbuffer_add_printf(buf, "Get position of queue (%s): %d\n", get_times, getpos);
-				evbuffer_add_printf(buf, "Number of unread queue: %d\n", ungetnum);
-			}
-			/* 查看队列状态（JSON方式，方便客服端程序处理） */
-			else if (strcmp(httpsqs_input_opt, "status_json") == 0) {
-				int maxqueue = httpsqs_read_maxqueue((char *)httpsqs_input_name); /* 最大队列数量 */
-				int putpos = httpsqs_read_putpos((char *)httpsqs_input_name); /* 入队列写入位置 */
-				int getpos = httpsqs_read_getpos((char *)httpsqs_input_name); /* 出队列读取位置 */
-				int ungetnum;
-				const char *put_times;
-				const char *get_times;
-				if (putpos >= getpos) {
-					ungetnum = abs(putpos - getpos); /* 尚未出队列条数 */
-					put_times = "1";
-					get_times = "1";
-				} else if (putpos < getpos) {
-					ungetnum = abs(maxqueue - getpos + putpos); /* 尚未出队列条数 */
-					put_times = "2";
-					get_times = "1";
-				}
-				evbuffer_add_printf(buf, "{\"name\":\"%s\",\"maxqueue\":%d,\"putpos\":%d,\"putlap\":%s,\"getpos\":%d,\"getlap\":%s,\"unread\":%d}\n", httpsqs_input_name, maxqueue, putpos, put_times, getpos, get_times, ungetnum);
-			}			
-			/* 查看单条队列内容 */
-			else if (strcmp(httpsqs_input_opt, "view") == 0 && httpsqs_input_pos >= 1 && httpsqs_input_pos <= 1000000000) {
-				char *httpsqs_output_value;
-				httpsqs_output_value = httpsqs_view ((char *)httpsqs_input_name, httpsqs_input_pos);
-				if (httpsqs_output_value) {
-					evbuffer_add_printf(buf, "%s", httpsqs_output_value);
-					free(httpsqs_output_value);
-				}
-			}
-			/* 重置队列 */
-			else if (strcmp(httpsqs_input_opt, "reset") == 0) {
-				int reset = httpsqs_reset((char *)httpsqs_input_name);
-				if (reset == 0) {
-					evbuffer_add_printf(buf, "%s", "HTTPSQS_RESET_OK");
-				} else {
-					evbuffer_add_printf(buf, "%s", "HTTPSQS_RESET_ERROR");
-				}
-			}
-			/* 设置最大的队列数量，最小值为10条，最大值为10亿条 */
-			else if (strcmp(httpsqs_input_opt, "maxqueue") == 0 && httpsqs_input_num >= 10 && httpsqs_input_num <= 1000000000) {
-				if (httpsqs_maxqueue((char *)httpsqs_input_name, httpsqs_input_num) != 0) {
-					/* 设置成功 */
-					evbuffer_add_printf(buf, "%s", "HTTPSQS_MAXQUEUE_OK");
-				} else {
-					/* 设置取消 */
-					evbuffer_add_printf(buf, "%s", "HTTPSQS_MAXQUEUE_CANCEL");
-				}
-			}
-			/* 设置定时更新内存内容到磁盘的间隔时间，最小值为1秒，最大值为10亿秒 */
-			else if (strcmp(httpsqs_input_opt, "synctime") == 0 && httpsqs_input_num >= 1 && httpsqs_input_num <= 1000000000) {
-				if (httpsqs_synctime(httpsqs_input_num) >= 1) {
-					/* 设置成功 */
-					evbuffer_add_printf(buf, "%s", "HTTPSQS_SYNCTIME_OK");
-				} else {
-					/* 设置取消 */
-					evbuffer_add_printf(buf, "%s", "HTTPSQS_SYNCTIME_CANCEL");
-				}				
+		/* 权限校验 */
+		bool is_auth_pass = false; /* 是否验证通过 */
+		if (httpsqs_settings_auth != NULL) {
+			/* 如果命令行启动参数设置了验证密码 */
+			if (httpsqs_input_auth != NULL && strcmp(httpsqs_settings_auth, httpsqs_input_auth) == 0) {
+				is_auth_pass = true;
 			} else {
-				/* 命令错误 */
-				evbuffer_add_printf(buf, "%s", "HTTPSQS_ERROR");				
+				is_auth_pass = false;
 			}
 		} else {
-			/* 命令错误 */
-			evbuffer_add_printf(buf, "%s", "HTTPSQS_ERROR");
+			/* 如果命令行启动参数没有设置验证密码 */
+			is_auth_pass = true;
 		}
-		
+
+		if (is_auth_pass == false) {
+			/* 校验失败 */
+			evbuffer_add_printf(buf, "%s", "HTTPSQS_AUTH_FAILED");
+		}
+		else 
+		{
+			/* 校验成功，或者命令行启动参数没有设置校验密码 */
+			if (httpsqs_input_pos_tmp != NULL) {
+				httpsqs_input_pos = atoi(httpsqs_input_pos_tmp); /* 队列位置点 数值型 */
+			}
+			if (httpsqs_input_num_tmp != NULL) {
+				httpsqs_input_num = atoi(httpsqs_input_num_tmp); /* 队列总长度 数值型 */
+			}
+	
+			/*参数是否存在判断 */
+			if (httpsqs_input_name != NULL && httpsqs_input_opt != NULL && strlen(httpsqs_input_name) <= 256) {
+				/* 入队列 */
+				if (strcmp(httpsqs_input_opt, "put") == 0) {
+					/* 优先接收POST正文信息 */
+					int buffer_data_len;
+					buffer_data_len = EVBUFFER_LENGTH(req->input_buffer);
+					if (buffer_data_len > 0) {
+						int queue_put_value = httpsqs_now_putpos((char *)httpsqs_input_name);
+						if (queue_put_value > 0) {
+							char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
+							sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_put_value);
+							char *httpsqs_input_postbuffer;					
+							char *buffer_data = (char *)tccalloc(1, buffer_data_len + 1);
+							memcpy (buffer_data, EVBUFFER_DATA(req->input_buffer), buffer_data_len);
+							httpsqs_input_postbuffer = urldecode(buffer_data);
+							tcbdbput2(httpsqs_db_tcbdb, queue_name, httpsqs_input_postbuffer);
+							memset(queue_name, '\0', 300);
+							sprintf(queue_name, "%d", queue_put_value);					
+							evhttp_add_header(req->output_headers, "Pos", queue_name);
+							evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_OK");
+							free(httpsqs_input_postbuffer);
+							free(buffer_data);
+						} else {
+							evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_END");
+						}
+					/* 如果POST正文无内容，则取URL中data参数的值 */
+					} else if (httpsqs_input_data != NULL) {
+						int queue_put_value = httpsqs_now_putpos((char *)httpsqs_input_name);
+						if (queue_put_value > 0) {
+							char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
+							sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_put_value);				
+							buffer_data_len = strlen(httpsqs_input_data);
+							char *httpsqs_input_postbuffer;
+							char *buffer_data = (char *)tccalloc(1, buffer_data_len + 1);					
+							memcpy (buffer_data, httpsqs_input_data, buffer_data_len);
+							httpsqs_input_postbuffer = urldecode(buffer_data);
+							tcbdbput2(httpsqs_db_tcbdb, queue_name, httpsqs_input_postbuffer);
+							memset(queue_name, '\0', 300);
+							sprintf(queue_name, "%d", queue_put_value);					
+							evhttp_add_header(req->output_headers, "Pos", queue_name);
+							evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_OK");
+							free(httpsqs_input_postbuffer);
+							free(buffer_data);
+						} else {
+							evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_END");
+						}
+					} else {
+						evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_ERROR");
+					}
+				}
+				/* 出队列 */
+				else if (strcmp(httpsqs_input_opt, "get") == 0) {
+					int queue_get_value = 0;
+					queue_get_value = httpsqs_now_getpos((char *)httpsqs_input_name);
+					if (queue_get_value == 0) {
+						evbuffer_add_printf(buf, "%s", "HTTPSQS_GET_END");
+					} else {
+						char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
+						sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_get_value);
+						char *httpsqs_output_value;
+						httpsqs_output_value = tcbdbget2(httpsqs_db_tcbdb, queue_name);
+						if (httpsqs_output_value) {
+							memset(queue_name, '\0', 300);
+							sprintf(queue_name, "%d", queue_get_value);	
+							evhttp_add_header(req->output_headers, "Pos", queue_name);
+							evbuffer_add_printf(buf, "%s", httpsqs_output_value);
+							free(httpsqs_output_value);
+						} else {
+							evbuffer_add_printf(buf, "%s", "HTTPSQS_GET_END");
+						}
+					}
+				}
+				/* 查看队列状态（普通浏览方式） */
+				else if (strcmp(httpsqs_input_opt, "status") == 0) {
+					int maxqueue = httpsqs_read_maxqueue((char *)httpsqs_input_name); /* 最大队列数量 */
+					int putpos = httpsqs_read_putpos((char *)httpsqs_input_name); /* 入队列写入位置 */
+					int getpos = httpsqs_read_getpos((char *)httpsqs_input_name); /* 出队列读取位置 */
+					int ungetnum;
+					const char *put_times;
+					const char *get_times;
+					if (putpos >= getpos) {
+						ungetnum = abs(putpos - getpos); /* 尚未出队列条数 */
+						put_times = "1st lap";
+						get_times = "1st lap";
+					} else if (putpos < getpos) {
+						ungetnum = abs(maxqueue - getpos + putpos); /* 尚未出队列条数 */
+						put_times = "2nd lap";
+						get_times = "1st lap";
+					}
+					evbuffer_add_printf(buf, "HTTP Simple Queue Service v%s\n", VERSION);
+					evbuffer_add_printf(buf, "------------------------------\n");
+					evbuffer_add_printf(buf, "Queue Name: %s\n", httpsqs_input_name);
+					evbuffer_add_printf(buf, "Maximum number of queues: %d\n", maxqueue);
+					evbuffer_add_printf(buf, "Put position of queue (%s): %d\n", put_times, putpos);
+					evbuffer_add_printf(buf, "Get position of queue (%s): %d\n", get_times, getpos);
+					evbuffer_add_printf(buf, "Number of unread queue: %d\n", ungetnum);
+				}
+				/* 查看队列状态（JSON方式，方便客服端程序处理） */
+				else if (strcmp(httpsqs_input_opt, "status_json") == 0) {
+					int maxqueue = httpsqs_read_maxqueue((char *)httpsqs_input_name); /* 最大队列数量 */
+					int putpos = httpsqs_read_putpos((char *)httpsqs_input_name); /* 入队列写入位置 */
+					int getpos = httpsqs_read_getpos((char *)httpsqs_input_name); /* 出队列读取位置 */
+					int ungetnum;
+					const char *put_times;
+					const char *get_times;
+					if (putpos >= getpos) {
+						ungetnum = abs(putpos - getpos); /* 尚未出队列条数 */
+						put_times = "1";
+						get_times = "1";
+					} else if (putpos < getpos) {
+						ungetnum = abs(maxqueue - getpos + putpos); /* 尚未出队列条数 */
+						put_times = "2";
+						get_times = "1";
+					}
+					evbuffer_add_printf(buf, "{\"name\":\"%s\",\"maxqueue\":%d,\"putpos\":%d,\"putlap\":%s,\"getpos\":%d,\"getlap\":%s,\"unread\":%d}\n", httpsqs_input_name, maxqueue, putpos, put_times, getpos, get_times, ungetnum);
+				}			
+				/* 查看单条队列内容 */
+				else if (strcmp(httpsqs_input_opt, "view") == 0 && httpsqs_input_pos >= 1 && httpsqs_input_pos <= 1000000000) {
+					char *httpsqs_output_value;
+					httpsqs_output_value = httpsqs_view ((char *)httpsqs_input_name, httpsqs_input_pos);
+					if (httpsqs_output_value) {
+						evbuffer_add_printf(buf, "%s", httpsqs_output_value);
+						free(httpsqs_output_value);
+					}
+				}
+				/* 重置队列 */
+				else if (strcmp(httpsqs_input_opt, "reset") == 0) {
+					int reset = httpsqs_reset((char *)httpsqs_input_name);
+					if (reset == 0) {
+						evbuffer_add_printf(buf, "%s", "HTTPSQS_RESET_OK");
+					} else {
+						evbuffer_add_printf(buf, "%s", "HTTPSQS_RESET_ERROR");
+					}
+				}
+				/* 设置最大的队列数量，最小值为10条，最大值为10亿条 */
+				else if (strcmp(httpsqs_input_opt, "maxqueue") == 0 && httpsqs_input_num >= 10 && httpsqs_input_num <= 1000000000) {
+					if (httpsqs_maxqueue((char *)httpsqs_input_name, httpsqs_input_num) != 0) {
+						/* 设置成功 */
+						evbuffer_add_printf(buf, "%s", "HTTPSQS_MAXQUEUE_OK");
+					} else {
+						/* 设置取消 */
+						evbuffer_add_printf(buf, "%s", "HTTPSQS_MAXQUEUE_CANCEL");
+					}
+				}
+				/* 设置定时更新内存内容到磁盘的间隔时间，最小值为1秒，最大值为10亿秒 */
+				else if (strcmp(httpsqs_input_opt, "synctime") == 0 && httpsqs_input_num >= 1 && httpsqs_input_num <= 1000000000) {
+					if (httpsqs_synctime(httpsqs_input_num) >= 1) {
+						/* 设置成功 */
+						evbuffer_add_printf(buf, "%s", "HTTPSQS_SYNCTIME_OK");
+					} else {
+						/* 设置取消 */
+						evbuffer_add_printf(buf, "%s", "HTTPSQS_SYNCTIME_CANCEL");
+					}				
+				} else {
+					/* 命令错误 */
+					evbuffer_add_printf(buf, "%s", "HTTPSQS_ERROR");				
+				}
+			} else {
+				/* 命令错误 */
+				evbuffer_add_printf(buf, "%s", "HTTPSQS_ERROR");
+			}
+		}
+	
 		/* 输出内容给客户端 */
         evhttp_send_reply(req, HTTP_OK, "OK", buf);
 		
@@ -595,6 +620,7 @@ static void show_help(void)
 		   "-c <num>      the maximum number of non-leaf nodes to be cached (default: 1024)\n"
 		   "-m <size>     database memory cache size in MB (default: 100)\n"
 		   "-i <file>     save PID in <file> (default: /tmp/httpsqs.pid)\n"
+		   "-a <auth>     the auth password to access httpsqs (example: mypass123)\n"
 		   "-d            run as a daemon\n"
 		   "-h            print this help and exit\n\n"
 		   "Use command \"killall httpsqs\", \"pkill httpsqs\" and \"kill `cat /tmp/httpsqs.pid`\" to stop httpsqs.\n"
@@ -620,6 +646,7 @@ int main(int argc, char *argv[], char *envp[])
 	int httpsqs_settings_cacheleaf = 2048; /* 缓存叶子节点数。叶子节点缓存数为非叶子节点数的两倍。单位：条 */
 	int httpsqs_settings_mappedmemory = 104857600; /* 单位：字节 */
 	httpsqs_settings_pidfile = "/tmp/httpsqs.pid";
+	httpsqs_settings_auth = NULL; /* 验证密码 */
 	
 	/* 命令行参数，暂时存储下面，便于进程重命名 */
 	int httpsqs_prename_num = 1;
@@ -633,7 +660,7 @@ int main(int argc, char *argv[], char *envp[])
 	}
 
     /* process arguments */
-    while ((c = getopt(argc, argv, "l:p:x:t:s:c:m:i:dh")) != -1) {
+    while ((c = getopt(argc, argv, "l:p:x:t:s:c:m:i:a:dh")) != -1) {
         switch (c) {
         case 'l':
             httpsqs_settings_listen = strdup(optarg);
@@ -671,6 +698,9 @@ int main(int argc, char *argv[], char *envp[])
         case 'i':
             httpsqs_settings_pidfile = strdup(optarg);
             break;
+        case 'a':
+            httpsqs_settings_auth = strdup(optarg);
+            break;			
         case 'd':
             httpsqs_settings_daemon = true;
             break;
