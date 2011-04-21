@@ -1,5 +1,5 @@
 /*
-HTTP Simple Queue Service - httpsqs v1.5.20110412
+HTTP Simple Queue Service - httpsqs v1.5
 Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com
 This is free software, and you are welcome to modify and redistribute it under the New BSD License
 */
@@ -39,7 +39,7 @@ This is free software, and you are welcome to modify and redistribute it under t
 
 #include "prename.h"
 
-#define VERSION "1.5"
+#define VERSION "1.6"
 
 /* 每个队列的默认最大长度为100万条 */
 #define HTTPSQS_DEFAULT_MAXQUEUE 1000000
@@ -276,6 +276,9 @@ static int httpsqs_now_putpos(const char* httpsqs_input_name)
 	if (queue_put_value == queue_get_value) { /* 如果队列写入ID+1之后追上队列读取ID，则说明队列已满，返回0，拒绝继续写入 */
 		queue_put_value = 0;
 	}
+	else if (queue_get_value <= 1 && queue_put_value > maxqueue_num) { /* 如果队列写入ID大于最大队列数量，并且从未进行过出队列操作（=0）或进行过1次出队列操作（=1），返回0，拒绝继续写入 */
+		queue_put_value = 0;
+	}	
 	else if (queue_put_value > maxqueue_num) { /* 如果队列写入ID大于最大队列数量，则重置队列写入位置点的值为1 */
 		if(tcbdbput2(httpsqs_db_tcbdb, queue_name, "1")) {
 			queue_put_value = 1;
@@ -608,14 +611,14 @@ static void sync_worker(const int sig) {
 static void show_help(void)
 {
 	char *b = "--------------------------------------------------------------------------------------------------\n"
-		  "HTTP Simple Queue Service - httpsqs v" VERSION " (April 12, 2011)\n\n"
+		  "HTTP Simple Queue Service - httpsqs v" VERSION " (April 14, 2011)\n\n"
 		  "Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com\n"
 		  "This is free software, and you are welcome to modify and redistribute it under the New BSD License\n"
 		  "\n"
 		   "-l <ip_addr>  interface to listen on, default is 0.0.0.0\n"
 		   "-p <num>      TCP port number to listen on (default: 1218)\n"
 		   "-x <path>     database directory (example: /opt/httpsqs/data)\n"
-		   "-t <second>   timeout for an http request (default: 3)\n"
+		   "-t <second>   keep-alive timeout for an http request (default: 60)\n"
 		   "-s <second>   the interval to sync updated contents to the disk (default: 5)\n"
 		   "-c <num>      the maximum number of non-leaf nodes to be cached (default: 1024)\n"
 		   "-m <size>     database memory cache size in MB (default: 100)\n"
@@ -640,7 +643,7 @@ int main(int argc, char *argv[], char *envp[])
 	int httpsqs_settings_port = 1218;
 	char *httpsqs_settings_datapath = NULL;
 	bool httpsqs_settings_daemon = false;
-	int httpsqs_settings_timeout = 3; /* 单位：秒 */
+	int httpsqs_settings_timeout = 60; /* 单位：秒 */
 	httpsqs_settings_syncinterval = 5; /* 单位：秒 */
 	int httpsqs_settings_cachenonleaf = 1024; /* 缓存非叶子节点数。单位：条 */
 	int httpsqs_settings_cacheleaf = 2048; /* 缓存叶子节点数。叶子节点缓存数为非叶子节点数的两倍。单位：条 */
@@ -825,7 +828,7 @@ int main(int argc, char *argv[], char *envp[])
     /* 处理段错误信号 */
     signal(SIGSEGV, kill_signal_worker);	
 	
-	/* 处理定时更新修改的数据到线程 */
+	/* 创建定时同步线程，定时将内存中的内容写入磁盘 */
 	pthread_t sync_worker_tid;
     pthread_create(&sync_worker_tid, NULL, (void *) sync_worker, NULL);
 	
