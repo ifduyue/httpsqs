@@ -1,5 +1,5 @@
 /*
-HTTP Simple Queue Service - httpsqs v1.5
+HTTP Simple Queue Service - httpsqs v1.7
 Author: Zhang Yan (http://blog.s135.com), E-mail: net@s135.com
 This is free software, and you are welcome to modify and redistribute it under the New BSD License
 */
@@ -39,7 +39,7 @@ This is free software, and you are welcome to modify and redistribute it under t
 
 #include "prename.h"
 
-#define VERSION "1.6"
+#define VERSION "1.7"
 
 /* 每个队列的默认最大长度为100万条 */
 #define HTTPSQS_DEFAULT_MAXQUEUE 1000000
@@ -344,11 +344,11 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
         struct evbuffer *buf;
         buf = evbuffer_new();
 		
-		/* 分析URL参数 */
-		char *decode_uri = strdup((char*) evhttp_request_uri(req));
+		/* 分析URL参数 */	
+		const char *httpsqs_query_part;
 		struct evkeyvalq httpsqs_http_query;
-		evhttp_parse_query(decode_uri, &httpsqs_http_query);
-		free(decode_uri);
+		httpsqs_query_part = evhttp_uri_get_query(req->uri_elems);
+		evhttp_parse_query_str(httpsqs_query_part, &httpsqs_http_query);
 		
 		/* 接收GET表单参数 */
 		const char *httpsqs_input_auth = evhttp_find_header (&httpsqs_http_query, "auth"); /* 队列名称 */
