@@ -1,6 +1,6 @@
 <?php
 include_once("httpsqs_client.php");
-$httpsqs = new httpsqs;
+$httpsqs = new httpsqs("127.0.0.1", 1218, "mypass123", "utf-8");
 
 $message = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -17,7 +17,7 @@ $number = 20000;
 echo "Test Queue PUT, please waitting ...\n";
 $start_time = microtime(true);
 for ($i=1;$i<=$number;$i++){
-    $httpsqs->pput("127.0.0.1", 1218, "utf-8", "command_line_test", $i.$message);
+    $httpsqs->put("command_line_test", $i.$message);
 }
 $run_time = microtime(true) - $start_time;
 echo "PUT ".$number." messages. Run Time for Queue PUT: $run_time sec, ".$number/$run_time." requests/sec\n";
@@ -27,7 +27,7 @@ ob_flush();
 echo "Test Queue GET, please waitting ...\n";
 $start_time = microtime(true);
 for ($i=1;$i<=$number;$i++){
-    $result = $httpsqs->pget("127.0.0.1", 1218, "utf-8", "command_line_test");
+    $result = $httpsqs->get("command_line_test");
     //echo($result."\n");
 }
 $run_time = microtime(true) - $start_time;
