@@ -424,7 +424,6 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
                         memcpy (buffer_data, EVBUFFER_DATA(req->input_buffer), buffer_data_len);
                         httpsqs_input_postbuffer = urldecode(buffer_data);
                         tcbdbput2(httpsqs_db_tcbdb, queue_name, httpsqs_input_postbuffer);
-                        memset(queue_name, '\0', 300);
                         sprintf(queue_name, "%d", queue_put_value);                 
                         evhttp_add_header(req->output_headers, "Pos", queue_name);
                         evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_OK");
@@ -445,7 +444,6 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
                         memcpy (buffer_data, httpsqs_input_data, buffer_data_len);
                         httpsqs_input_postbuffer = urldecode(buffer_data);
                         tcbdbput2(httpsqs_db_tcbdb, queue_name, httpsqs_input_postbuffer);
-                        memset(queue_name, '\0', 300);
                         sprintf(queue_name, "%d", queue_put_value);                 
                         evhttp_add_header(req->output_headers, "Pos", queue_name);
                         evbuffer_add_printf(buf, "%s", "HTTPSQS_PUT_OK");
@@ -470,7 +468,6 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
                     char *httpsqs_output_value;
                     httpsqs_output_value = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
                     if (httpsqs_output_value) {
-                        memset(queue_name, '\0', 300);
                         sprintf(queue_name, "%d", queue_get_value); 
                         evhttp_add_header(req->output_headers, "Pos", queue_name);
                         evbuffer_add_printf(buf, "%s", httpsqs_output_value);
