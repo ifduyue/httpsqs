@@ -128,7 +128,7 @@ static int httpsqs_read_putpos(const char* httpsqs_input_name)
 
     int len = sprintf(queue_name, "%s:%s", httpsqs_input_name, "putpos");
 
-    queue_value_tmp = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
+    queue_value_tmp = tcbdbget(httpsqs_db_tcbdb, queue_name, len, &len);
     if(queue_value_tmp){
         queue_value = atoi(queue_value_tmp);
         free(queue_value_tmp);
@@ -146,7 +146,7 @@ static int httpsqs_read_getpos(const char* httpsqs_input_name)
     
     int len = sprintf(queue_name, "%s:%s", httpsqs_input_name, "getpos");
     
-    queue_value_tmp = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
+    queue_value_tmp = tcbdbget(httpsqs_db_tcbdb, queue_name, len, &len);
     if(queue_value_tmp){
         queue_value = atoi(queue_value_tmp);
         free(queue_value_tmp);
@@ -164,7 +164,7 @@ static int httpsqs_read_maxqueue(const char* httpsqs_input_name)
     
     int len = sprintf(queue_name, "%s:%s", httpsqs_input_name, "maxqueue");
     
-    queue_value_tmp = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
+    queue_value_tmp = tcbdbget(httpsqs_db_tcbdb, queue_name, len, &len);
     if(queue_value_tmp){
         queue_value = atoi(queue_value_tmp);
         free(queue_value_tmp);
@@ -266,8 +266,7 @@ char *httpsqs_view(const char* httpsqs_input_name, int pos)
     char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
     
     int len = sprintf(queue_name, "%s:%d", httpsqs_input_name, pos);
-    
-    queue_value = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
+    queue_value = tcbdbget(httpsqs_db_tcbdb, queue_name, len, &len);
     
     return queue_value;
 }
@@ -466,7 +465,7 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
                     char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
                     int len = sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_get_value);
                     char *httpsqs_output_value;
-                    httpsqs_output_value = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
+                    httpsqs_output_value = tcbdbget(httpsqs_db_tcbdb, queue_name, len, &len);
                     if (httpsqs_output_value) {
                         sprintf(queue_name, "%d", queue_get_value); 
                         evhttp_add_header(req->output_headers, "Pos", queue_name);
