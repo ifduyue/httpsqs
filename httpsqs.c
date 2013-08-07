@@ -126,9 +126,9 @@ static int httpsqs_read_putpos(const char* httpsqs_input_name)
     char *queue_value_tmp;
     char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
 
-    sprintf(queue_name, "%s:%s", httpsqs_input_name, "putpos");
+    int len = sprintf(queue_name, "%s:%s", httpsqs_input_name, "putpos");
 
-    queue_value_tmp = tcbdbget2(httpsqs_db_tcbdb, queue_name);
+    queue_value_tmp = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
     if(queue_value_tmp){
         queue_value = atoi(queue_value_tmp);
         free(queue_value_tmp);
@@ -144,9 +144,9 @@ static int httpsqs_read_getpos(const char* httpsqs_input_name)
     char *queue_value_tmp;
     char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
     
-    sprintf(queue_name, "%s:%s", httpsqs_input_name, "getpos");
+    int len = sprintf(queue_name, "%s:%s", httpsqs_input_name, "getpos");
     
-    queue_value_tmp = tcbdbget2(httpsqs_db_tcbdb, queue_name);
+    queue_value_tmp = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
     if(queue_value_tmp){
         queue_value = atoi(queue_value_tmp);
         free(queue_value_tmp);
@@ -162,9 +162,9 @@ static int httpsqs_read_maxqueue(const char* httpsqs_input_name)
     char *queue_value_tmp;
     char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
     
-    sprintf(queue_name, "%s:%s", httpsqs_input_name, "maxqueue");
+    int len = sprintf(queue_name, "%s:%s", httpsqs_input_name, "maxqueue");
     
-    queue_value_tmp = tcbdbget2(httpsqs_db_tcbdb, queue_name);
+    queue_value_tmp = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
     if(queue_value_tmp){
         queue_value = atoi(queue_value_tmp);
         free(queue_value_tmp);
@@ -228,8 +228,8 @@ static void httpsqs_read_metadata(const char* httpsqs_input_name, int *get, int 
 static void httpsqs_write_metadata(const char* httpsqs_input_name, int get, int put, int maxqueue)
 {
     char val[64];
-    sprintf(val, "%d,%d,%d", get, put, maxqueue);
-    tcbdbput2(httpsqs_db_tcbdb, httpsqs_input_name, val);
+    int len = sprintf(val, "%d,%d,%d", get, put, maxqueue);
+    tcbdbput(httpsqs_db_tcbdb, httpsqs_input_name, strlen(httpsqs_input_name), val, len);
 }
 
 /* 设置最大的队列数量，返回值为设置的队列数量。如果返回值为0，则表示设置取消（取消原因为：设置的最大的队列数量小于”当前队列写入位置点“和”当前队列读取位置点“，或者”当前队列写入位置点“小于”当前队列的读取位置点） */
@@ -265,9 +265,9 @@ char *httpsqs_view(const char* httpsqs_input_name, int pos)
     char *queue_value;
     char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
     
-    sprintf(queue_name, "%s:%d", httpsqs_input_name, pos);
+    int len = sprintf(queue_name, "%s:%d", httpsqs_input_name, pos);
     
-    queue_value = tcbdbget2(httpsqs_db_tcbdb, queue_name);
+    queue_value = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
     
     return queue_value;
 }
@@ -466,9 +466,9 @@ void httpsqs_handler(struct evhttp_request *req, void *arg)
                     evbuffer_add_printf(buf, "%s", "HTTPSQS_GET_END");
                 } else {
                     char queue_name[300] = {0}; /* 队列名称的总长度，用户输入的队列长度少于256字节 */
-                    sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_get_value);
+                    int len = sprintf(queue_name, "%s:%d", httpsqs_input_name, queue_get_value);
                     char *httpsqs_output_value;
-                    httpsqs_output_value = tcbdbget2(httpsqs_db_tcbdb, queue_name);
+                    httpsqs_output_value = tcbdbget(httpsqs_db_tcbdb, queue_name, len, NULL);
                     if (httpsqs_output_value) {
                         memset(queue_name, '\0', 300);
                         sprintf(queue_name, "%d", queue_get_value); 
