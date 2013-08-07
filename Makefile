@@ -1,6 +1,8 @@
 # Makefile for httpsqs
+libevent?=/usr/local/libevent-2.0.12-stable/lib
+tokyocabinet?=/usr/local/tokyocabinet-1.4.47
 CC=gcc
-CFLAGS=-Wl,-rpath,/usr/local/libevent-2.0.12-stable/lib/:/usr/local/tokyocabinet-1.4.47/lib/ -L/usr/local/libevent-2.0.12-stable/lib/ -levent -L/usr/local/tokyocabinet-1.4.47/lib/ -ltokyocabinet -I/usr/local/libevent-2.0.12-stable/include/ -I/usr/local/tokyocabinet-1.4.47/include/ -lz -lbz2 -lrt -lpthread -lm -lc -O2 -g
+CFLAGS=-Wl,-rpath,$(libevent)/lib/:$(tokyocabinet)/lib/ -L$(libevent)/lib/ -levent -L$(tokyocabinet)/lib/ -ltokyocabinet -I$(libevent)/include/ -I$(tokyocabinet)/include/ -lz -lbz2 -lrt -lpthread -lm -lc -O2 -g
 
 httpsqs: httpsqs.c
 	$(CC) -o httpsqs httpsqs.c prename.c $(CFLAGS)
